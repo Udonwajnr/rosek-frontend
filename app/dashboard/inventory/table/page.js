@@ -65,8 +65,8 @@ export default function FullInventoryTable() {
   };
 
   return (
-    <Card className=" bg-white shadow-lg">
-      <div className="p-4 bg-white">
+    <Card className="shadow-lg">
+      <div className="p-4 ">
         <div className="mb-4 flex items-center justify-between">
           <Input
             className="w-full max-w-xs"
@@ -77,7 +77,7 @@ export default function FullInventoryTable() {
         </div>
         <div className="relative overflow-auto">
           <Table className="min-w-full text-left">
-            <TableHeader className="sticky top-0 bg-white">
+            <TableHeader className="sticky top-0 ">
               <TableRow>
                 {["name", "dosage", "price", "frequency", "in stock","action"].map(
                   (header) => (

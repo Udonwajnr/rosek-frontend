@@ -104,7 +104,7 @@ export default function UsersTable() {
           </TableHeader>
           <TableBody>
             {currentUsers.map((user) => (
-              <TableRow key={user.id} className="hover:bg-gray-100">
+              <TableRow key={user.id} className="">
                 <TableCell className="p-4 font-medium">{user.fullName}</TableCell>
                 <TableCell className="p-4">{new Date(user.dateOfBirth).toLocaleDateString()}</TableCell>
                 <TableCell className="p-4">{user.gender}</TableCell>

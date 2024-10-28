@@ -96,7 +96,6 @@ export default function InventoryDashboard() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-         
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle>Recently Added Medication</CardTitle>

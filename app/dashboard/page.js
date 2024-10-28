@@ -41,7 +41,7 @@ export default function DashBoardHome() {
             </Card>
 
             {/* Sales */}
-            <Card className="p-4">
+            {/* <Card className="p-4">
               <CardHeader className="flex justify-between items-center">
                 <CardTitle>Total Sales</CardTitle>
                 <DollarSign className="text-gray-400" size={24} />
@@ -50,10 +50,10 @@ export default function DashBoardHome() {
                 <p className="text-4xl font-semibold">$12,345</p>
                 <Badge variant="outline" className="mt-2">This Month</Badge>
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Performance Metrics */}
-            <Card className="p-4">
+            {/* <Card className="p-4">
               <CardHeader className="flex justify-between items-center">
                 <CardTitle>Performance</CardTitle>
                 <BarChart className="text-gray-400" size={24} />
@@ -62,7 +62,7 @@ export default function DashBoardHome() {
                 <p className="text-4xl font-semibold">85%</p>
                 <Badge variant="outline" className="mt-2">System Efficiency</Badge>
               </CardContent>
-            </Card>
+            </Card> */}
           </div>
 
           {/* Detailed Section */}

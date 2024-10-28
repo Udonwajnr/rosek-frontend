@@ -42,8 +42,8 @@ export default function DrugInventoryTable({ hospitalData }) {
   }, [searchTerm, sortBy, sortDirection, hospitalData]);
 
   return (
-    <Card className=" bg-white shadow-lg col-start-2 col-span-4">
-      <div className="p-4 bg-white">
+    <Card className=" shadow-lg col-start-2 col-span-4">
+      <div className="p-4 ">
         <div className="mb-4 flex items-center justify-between">
           <Input
             className="w-full max-w-xs"
@@ -68,7 +68,7 @@ export default function DrugInventoryTable({ hospitalData }) {
         </div>
         <div className="relative ">
           <Table className="min-w-full text-left">
-            <TableHeader className="sticky top-0 bg-white">
+            <TableHeader className="sticky top-0 ">
               <TableRow>
                 {["nameOfDrugs", "quantityInStock", "price", "expiryDate"].map(
                   (header) => (
@@ -114,7 +114,7 @@ export default function DrugInventoryTable({ hospitalData }) {
                     : "destructive";
 
                 return (
-                  <TableRow key={item._id} className="hover:bg-gray-100">
+                  <TableRow key={item._id}>
                     <TableCell className="p-4 font-medium">
                       {item.nameOfDrugs}
                     </TableCell>
@@ -161,6 +161,7 @@ export default function DrugInventoryTable({ hospitalData }) {
           </Table>
         </div>
       </div>
+      
     </Card>
   );
 }

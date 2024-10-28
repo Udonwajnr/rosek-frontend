@@ -225,7 +225,7 @@ export default function InventoryLandingPage() {
         </main>
 
         <footer className="py-4 px-6 bg-blue-700 text-white text-center">
-          <p>&copy; {new Date().getFullYear()} Pharma Inventory. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} . All rights reserved.</p>
         </footer>
       </div>
     </>

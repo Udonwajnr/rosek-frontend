@@ -81,7 +81,6 @@ export default function UserDetails() {
           <p className="text-gray-500">User Details</p>
         </div>
       </header>
-
       {/* Personal Information */}
       <Card className="shadow-lg">
         <CardHeader>

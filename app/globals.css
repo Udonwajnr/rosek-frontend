@@ -67,3 +67,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+.dark table {
+  background-color: #1a1a1a; /* Example background */
+  color: #e5e5e5; /* Example text color */
+}
