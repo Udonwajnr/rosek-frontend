@@ -82,7 +82,7 @@ export default function RegisterHospital() {
     }
   };
 
-  if (success) return <VerifyEmail />;
+  if (success) return <VerifyEmail email={formData.email}/>;
 
   return (
     <div className="flex justify-center items-center h-screen bg-background">

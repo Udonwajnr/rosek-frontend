@@ -38,6 +38,10 @@ export default function EmailVerified() {
     }
   }, [token]);
 
+  const resendVerification=async()=>{
+    await axios.post("",{email})
+  }
+
   useEffect(() => {
     const data = localStorage.getItem("accessToken");
     if (data) {

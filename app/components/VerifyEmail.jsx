@@ -1,8 +1,19 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import axios from "axios";
 
-export default function VerifyEmail() {
+export default function VerifyEmail({ email }) {
+
+  const resendVerificationLink = async () => {
+    try {
+      await axios.post("https://medical-api-advo.onrender.com/api/hospital/resend-verification", { email });
+      console.log("Verification code has been sent again");
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
   return (
     <div className="flex justify-center items-center h-screen bg-background">
       <Card className="w-full max-w-md p-6 shadow-lg">
@@ -21,11 +32,11 @@ export default function VerifyEmail() {
           </Link>
         </CardContent>
         <CardFooter>
-          <div className="text-center  w-full">
+          <div className="text-center w-full">
             <p className="text-sm text-gray-600">Didn’t receive the email?</p>
-            <Link href="/resend-verification" className="text-blue-500 underline text-center">
+            <Button onClick={resendVerificationLink}>
               Resend Verification Email
-            </Link>
+            </Button>
           </div>
         </CardFooter>
       </Card>
