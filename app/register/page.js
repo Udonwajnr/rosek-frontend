@@ -72,10 +72,11 @@ export default function RegisterHospital() {
     setLoading(true);
 
     try {
-      const response = await api.post('https://medical-api-advo.onrender.com/api/hospital/register', formData,);
+      const response = await api.post('https://medical-api-advo.onrender.com/api/hospital/register', formData);
 
       setSuccess(true);
     } catch (error) {
+      console.log(error)
       setError(error.response?.data?.msg || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
