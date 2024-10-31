@@ -22,7 +22,6 @@ export default function EmailVerified() {
         .catch((error) => {
           if (error.response) {
             const message = error.response.data.msg;
-
             if (message === "Invalid token or hospital not found") {
               setStatus("invalid");
             } else if (message === "Email already verified") {
