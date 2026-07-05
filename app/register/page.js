@@ -83,7 +83,7 @@ export default function RegisterHospital() {
         `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/register`,
         formData,
       );
-
+      router.push("/login");
       setSuccess(true);
     } catch (error) {
       console.log(error);
@@ -95,7 +95,7 @@ export default function RegisterHospital() {
     }
   };
 
-  if (success) return <VerifyEmail email={formData.email} />;
+  // if (success) return <VerifyEmail email={formData.email} />;
 
   return (
     <div className="flex justify-center items-center h-screen bg-background">
