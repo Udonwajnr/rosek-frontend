@@ -18,7 +18,7 @@ export default function UserDeleteConfirmation() {
   const checkIfUserExists = async (userId, hospitalId) => {
     try {
       const response = await api.get(
-        `http://localhost:8000/api/user/hospital/${hospitalId}/users/${userId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/user/hospital/${hospitalId}/users/${userId}`,
       );
       if (response.status === 200 && response.data) {
         setIsValidUser(true);
@@ -62,7 +62,7 @@ export default function UserDeleteConfirmation() {
 
     try {
       await api.delete(
-        `http://localhost:8000/api/user/hospital/${hospitalId}/users/${userId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/user/hospital/${hospitalId}/users/${userId}`,
       );
       alert("User deleted successfully.");
       router.push("/dashboard/user");

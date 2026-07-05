@@ -43,7 +43,7 @@ export default function ForgotPassword() {
 
     try {
       const response = await axios.post(
-        "http://localhost:8000/api/hospital/forgot-password",
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/forgot-password`,
         { email },
         { headers: { "Content-Type": "application/json" } },
       );

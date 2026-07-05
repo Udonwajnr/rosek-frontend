@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import axios from "axios";
 
+console.log("Backend endpoint:", process.env.NEXT_PUBLIC_BACKEND_ENDPOINT);
+
 const FEATURES = [
   {
     icon: Sparkles,

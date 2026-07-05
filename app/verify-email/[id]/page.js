@@ -23,7 +23,9 @@ export default function EmailVerified() {
   useEffect(() => {
     if (token) {
       axios
-        .get(`http://localhost:8000/api/hospital/verify-email/${token}`)
+        .get(
+          `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/verify-email/${token}`,
+        )
         .then(() => {
           setStatus("success");
         })

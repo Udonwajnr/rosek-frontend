@@ -39,7 +39,7 @@ export default function LoginHospital() {
     try {
       // Use the api instance for the request
       const response = await api.post(
-        "http://localhost:8000/api/hospital/login",
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/login`,
         {
           email,
           password,

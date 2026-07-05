@@ -47,7 +47,7 @@ export default function UserTable() {
     const fetchUsers = async () => {
       try {
         const response = await api.get(
-          `http://localhost:8000/api/user/hospital/${hospitalId}/users`,
+          `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/user/hospital/${hospitalId}/users`,
         );
         setUsers(response.data);
       } catch (error) {

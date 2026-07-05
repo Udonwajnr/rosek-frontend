@@ -80,7 +80,7 @@ export default function RegisterHospital() {
 
     try {
       const response = await api.post(
-        "http://localhost:8000/api/hospital/register",
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/register`,
         formData,
       );
 

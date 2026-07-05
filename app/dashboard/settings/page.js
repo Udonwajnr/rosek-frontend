@@ -56,7 +56,9 @@ export default function SettingsPage() {
     const getHospital = async () => {
       const hospital = localStorage.getItem("_id");
       await api
-        .get(`http://localhost:8000/api/hospital/${hospital}`)
+        .get(
+          `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/${hospital}`,
+        )
         .then((response) => {
           setFormData(response.data);
           setHospitalId(hospital);
@@ -102,7 +104,10 @@ export default function SettingsPage() {
     setError("");
     try {
       await api
-        .put(`http://localhost:8000/api/hospital/${hospitalId}`, formData)
+        .put(
+          `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/${hospitalId}`,
+          formData,
+        )
         .then((data) => {
           toast.success("Updated Successfully");
         });

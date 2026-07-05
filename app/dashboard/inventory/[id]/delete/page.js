@@ -19,7 +19,7 @@ export default function DeleteMedication() {
         const hospital = localStorage.getItem("_id");
         const response = api
           .get(
-            `http://localhost:8000/api/medication/${hospital}/medications/${id}`,
+            `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/medication/${hospital}/medications/${id}`,
           )
           .then((data) => {
             setHospitalId(hospital);
@@ -49,7 +49,7 @@ export default function DeleteMedication() {
     setIsDeleting(true);
     try {
       await api.delete(
-        `http://localhost:8000/api/medication/${hospitalId}/medications/${id}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/medication/${hospitalId}/medications/${id}`,
       );
       alert("Deleted Successfully");
       router.push("/dashboard/inventory");

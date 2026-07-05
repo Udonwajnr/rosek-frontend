@@ -53,7 +53,7 @@ export default function ResetPassword() {
 
     try {
       const response = await axios.post(
-        "http://localhost:8000/api/hospital/reset-password",
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/reset-password`,
         {
           token,
           newPassword,

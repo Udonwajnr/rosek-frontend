@@ -14,7 +14,7 @@ export default function VerifyEmail({ email }) {
   const resendVerificationLink = async () => {
     try {
       await axios.post(
-        "http://localhost:8000/api/hospital/resend-verification",
+        `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/resend-verification`,
         { email },
       );
       console.log("Verification code has been sent again");

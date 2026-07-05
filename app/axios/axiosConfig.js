@@ -2,7 +2,7 @@
 import axios from "axios";
 // Create an Axios instance
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: process.env.NEXT_PUBLIC_BACKEND_ENDPOINT,
   withCredentials: true, // Ensures cookies (refresh token) are sent with requests
 });
 
@@ -22,7 +22,7 @@ api.interceptors.response.use(
       try {
         // Attempt to get a new access token using the refresh token
         const refreshResponse = await axios.post(
-          "http://localhost:8000/api/hospital/refresh-token",
+          `${process.env.NEXT_PUBLIC_BACKEND_ENDPOINT}/api/hospital/refresh-token`,
           {},
           { withCredentials: true }, // Ensure cookies are sent with this request
         );
