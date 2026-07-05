@@ -9,7 +9,7 @@ import {
   PulseLine,
   useScrollY,
   useReducedMotion,
-} from "@/app/components/marketing";
+} from "../../app/components/marketing";
 import {
   ArrowRight,
   Sparkles,
