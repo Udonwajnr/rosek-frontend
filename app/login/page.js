@@ -1,6 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -17,48 +24,53 @@ export default function LoginHospital() {
   const router = useRouter();
 
   useEffect(() => {
-    const accessToken = localStorage.getItem('accessToken');
+    const accessToken = localStorage.getItem("accessToken");
     if (accessToken) {
       // If an access token is found, redirect to the dashboard
-      router.push('/dashboard');
+      router.push("/dashboard");
     }
-}, []);
+  }, []);
 
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       // Use the api instance for the request
-      const response = await api.post('https://medical-api-advo.onrender.com/api/hospital/login', {
-        email,
-        password,
-      });
-      console.log(response)
+      const response = await api.post(
+        "http://localhost:8000/api/hospital/login",
+        {
+          email,
+          password,
+        },
+      );
+      console.log(response);
       // Save the access token to localStorage
-      localStorage.setItem('accessToken', response.data.accessToken); // Store access token under a different key
-      
+      localStorage.setItem("accessToken", response.data.accessToken); // Store access token under a different key
+
       // Redirect to the dashboard or another page
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (error) {
       if (error.response && error.response.data.msg) {
         setError(error.response.data.msg);
         console.log(error);
       } else {
-        setError('An error occurred. Please try again.');
+        setError("An error occurred. Please try again.");
       }
     } finally {
       setLoading(false);
     }
-};
+  };
 
   return (
     <div className="flex justify-center items-center h-screen bg-background">
       <Card className="w-full max-w-md p-6 shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Login</CardTitle>
-          <CardDescription>Enter your credentials to access your account.</CardDescription>
+          <CardDescription>
+            Enter your credentials to access your account.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && <p className="text-red-600 text-center">{error}</p>}
@@ -77,7 +89,11 @@ const handleSubmit = async (e) => {
             <div className="grid gap-2 mt-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" className="text-sm underline" prefetch={false}>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm underline"
+                  prefetch={false}
+                >
                   Forgot password?
                 </Link>
               </div>
@@ -90,12 +106,12 @@ const handleSubmit = async (e) => {
                 required
               />
             </div>
-            <Button
-              type="submit"
-              className="w-full mt-4"
-              disabled={loading}
-            >
-              {loading ? <Bars color="#ffffff" height={24} width={24} /> : "Login"}
+            <Button type="submit" className="w-full mt-4" disabled={loading}>
+              {loading ? (
+                <Bars color="#ffffff" height={24} width={24} />
+              ) : (
+                "Login"
+              )}
             </Button>
           </form>
         </CardContent>
@@ -105,7 +121,7 @@ const handleSubmit = async (e) => {
               Don't have an account?
               <Link href="/register" className="text-sm underline">
                 Register
-              </Link>      
+              </Link>
             </p>
           </div>
         </CardFooter>

@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import axios from "axios";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -13,12 +20,12 @@ import { useRouter } from "next/navigation";
 
 export default function ResetPassword() {
   const [status, setStatus] = useState("loading"); // 'loading', 'form', 'success', 'expired', 'invalid', 'error'
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState(null);
   const pathname = usePathname();
-  const token = pathname.split('/').pop(); // Extract the token from the URL path
-  const router=useRouter()
+  const token = pathname.split("/").pop(); // Extract the token from the URL path
+  const router = useRouter();
   useEffect(() => {
     if (token) {
       setStatus("form"); // Display form after token is initially checked
@@ -35,7 +42,6 @@ export default function ResetPassword() {
     }
   }, [router]);
 
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -46,11 +52,14 @@ export default function ResetPassword() {
     }
 
     try {
-      const response = await axios.post('https://medical-api-advo.onrender.com/api/hospital/reset-password', {
-        token,
-        newPassword,
-        confirmPassword
-      });
+      const response = await axios.post(
+        "http://localhost:8000/api/hospital/reset-password",
+        {
+          token,
+          newPassword,
+          confirmPassword,
+        },
+      );
 
       if (response.status === 200) {
         setStatus("success");
@@ -78,7 +87,9 @@ export default function ResetPassword() {
           {status === "loading" && (
             <>
               <CardTitle className="text-2xl font-bold">Verifying...</CardTitle>
-              <CardDescription>Please wait while we verify your token.</CardDescription>
+              <CardDescription>
+                Please wait while we verify your token.
+              </CardDescription>
               <div className="flex justify-center mt-4">
                 <Bars
                   height="40"
@@ -93,26 +104,43 @@ export default function ResetPassword() {
           )}
           {status === "form" && (
             <>
-              <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Reset Password
+              </CardTitle>
               <CardDescription>Enter your new password below.</CardDescription>
             </>
           )}
           {status === "success" && (
             <>
-              <CardTitle className="text-2xl font-bold text-green-600">Password Reset Successfully</CardTitle>
-              <CardDescription>Your password has been successfully reset. You can now log in with your new password.</CardDescription>
+              <CardTitle className="text-2xl font-bold text-green-600">
+                Password Reset Successfully
+              </CardTitle>
+              <CardDescription>
+                Your password has been successfully reset. You can now log in
+                with your new password.
+              </CardDescription>
             </>
           )}
           {status === "invalid" && (
             <>
-              <CardTitle className="text-2xl font-bold text-red-600">Invalid or Expired Token</CardTitle>
-              <CardDescription>The reset link is invalid or has expired. Please request a new one.</CardDescription>
+              <CardTitle className="text-2xl font-bold text-red-600">
+                Invalid or Expired Token
+              </CardTitle>
+              <CardDescription>
+                The reset link is invalid or has expired. Please request a new
+                one.
+              </CardDescription>
             </>
           )}
           {status === "error" && (
             <>
-              <CardTitle className="text-2xl font-bold text-red-600">Something Went Wrong</CardTitle>
-              <CardDescription>We encountered an error resetting your password. Please try again later or contact support.</CardDescription>
+              <CardTitle className="text-2xl font-bold text-red-600">
+                Something Went Wrong
+              </CardTitle>
+              <CardDescription>
+                We encountered an error resetting your password. Please try
+                again later or contact support.
+              </CardDescription>
             </>
           )}
         </CardHeader>
@@ -142,21 +170,27 @@ export default function ResetPassword() {
                 />
               </div>
               {error && <p className="text-red-500">{error}</p>}
-              <Button type="submit" className="w-full bg-blue-600 text-white">Reset Password</Button>
+              <Button type="submit" className="w-full bg-blue-600 text-white">
+                Reset Password
+              </Button>
             </form>
           )}
         </CardContent>
         {status === "success" && (
           <CardFooter className="text-center">
             <Link href="/login">
-              <Button className="w-full bg-green-600 text-white">Go to Login</Button>
+              <Button className="w-full bg-green-600 text-white">
+                Go to Login
+              </Button>
             </Link>
           </CardFooter>
         )}
         {status === "invalid" && (
           <CardFooter className="text-center">
             <Link href="/resend-reset-password">
-              <Button className="w-full bg-blue-600 text-white">Resend Reset Password Link</Button>
+              <Button className="w-full bg-blue-600 text-white">
+                Resend Reset Password Link
+              </Button>
             </Link>
           </CardFooter>
         )}

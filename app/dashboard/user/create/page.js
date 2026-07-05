@@ -1,245 +1,189 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import api from "@/app/axios/axiosConfig";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import api from "@/app/axios/axiosConfig";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Bars } from "react-loader-spinner";
-import { Toaster, toast } from 'sonner'
+import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Search, Plus, X, Pill, Loader2, UserPlus } from "lucide-react";
 
-export default function CreateUser() {
+/*
+ * Create patient — two panels:
+ *  left: patient details, right: assign medications from inventory.
+ * Submits the exact payload the backend createUserInHospital expects.
+ */
+
+export default function CreatePatient() {
   const router = useRouter();
-  const [hospital, setHospital] = useState("");
-  const [medicationsData, setMedicationsData] = useState([]); // All medications from the API
-  const [activeMedicationIndex, setActiveMedicationIndex] = useState(null);
-  const [filteredMedications, setFilteredMedications] = useState([]); // Medications filtered by input
-  const [userErrorMessage,setUserErrorMessage] = useState([])
-  const [formData, setFormData] = useState({
+  const [hospitalId, setHospitalId] = useState("");
+  const [inventory, setInventory] = useState(null);
+
+  const [form, setForm] = useState({
     fullName: "",
     dateOfBirth: "",
     gender: "",
     phoneNumber: "",
     email: "",
-    medications: [{ nameOfDrugs: "", id: "", quantity: 1, startDate:"", endDate:"", custom: false, customDosage: "", customFrequency: { value: '', unit: 'hours' }, customDuration: { value: '', unit: 'days' } }],
   });
-  const wrapperRef = useRef(null);
-  const [loading, setLoading] = useState(false);
+  const [assigned, setAssigned] = useState([]); // {med, startDate, quantity, custom, customDosage, customFrequency, customDuration}
+  const [medQuery, setMedQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const pickerRef = useRef(null);
 
-  // Fetch medications when component mounts
   useEffect(() => {
-    const hospitalId = localStorage.getItem("_id");
-    setHospital(hospitalId);
+    const id = localStorage.getItem("_id");
+    setHospitalId(id);
+    api
+      .get(`/api/medication/${id}/medications`)
+      .then((res) => setInventory(res.data || []))
+      .catch(() => {
+        setInventory([]);
+        toast.error("Could not load inventory for medication assignment.");
+      });
 
-    const fetchMedications = async () => {
-      try {
-        const response = await api.get(
-          `https://medical-api-advo.onrender.com/api/medication/${hospitalId}/medications`
-        );
-        setMedicationsData(response.data);
-      } catch (error) {
-        console.error("Error fetching medications:", error);
-      }
+    const onClickOutside = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false);
     };
-
-    fetchMedications();
-
-    const handleClickOutside = (event) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-        setFilteredMedications([]); // Hide dropdown when clicking outside
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  // Handle input change for form fields
-  const handleInputChange = (e) => {
-    const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
-  };
+  const setField = (id, value) => setForm((prev) => ({ ...prev, [id]: value }));
 
-  // Handle gender selection change
-  const handleGenderChange = (value) => {
-    setFormData((prev) => ({ ...prev, gender: value }));
-  };
+  const suggestions = useMemo(() => {
+    if (!inventory) return [];
+    const q = medQuery.trim().toLowerCase();
+    return inventory
+      .filter(
+        (m) =>
+          !assigned.some((a) => a.med._id === m._id) &&
+          (q === "" || m.nameOfDrugs?.toLowerCase().includes(q))
+      )
+      .slice(0, 6);
+  }, [inventory, medQuery, assigned]);
 
-  const handleChange = (e, index) => {
-    const { id, value, type, checked } = e.target;
-  
-    setFormData((prevFormData) => {
-      const updatedMedications = [...prevFormData.medications];
-      const currentMedication = updatedMedications[index];
-  
-      if (id.includes('frequency') || id.includes('duration')) {
-        // Split the id into field and subfield (e.g., frequencyValue, frequencyUnit)
-        const [field, subField] = id.split(/(?=[A-Z])/);
-        currentMedication[`custom${capitalizeFirstLetter(field)}`] = {
-          ...currentMedication[`custom${capitalizeFirstLetter(field)}`],
-          [subField.toLowerCase()]: value,
-        };
-      } else if (id === 'customDosage') {
-        // For custom dosage
-        currentMedication.customDosage = value;
-      } else {
-        // For other general fields
-        currentMedication[id] = type === 'checkbox' ? checked : value;
-      }
-  
-      return { ...prevFormData, medications: updatedMedications };
-    });
-  };
-  
-  // Helper function to capitalize the first letter
-  const capitalizeFirstLetter = (string) => {
-    return string.charAt(0).toUpperCase() + string.slice(1);
-  };
-  
-  // Add new medication field
-  const handleAddMedication = () => {
-    setFormData((prev) => ({
+  const assign = (med) => {
+    if ((med.quantityInStock || 0) < 1) {
+      toast.error(`${med.nameOfDrugs} is out of stock.`);
+      return;
+    }
+    setAssigned((prev) => [
       ...prev,
-      medications: [...prev.medications, { nameOfDrugs: "", id: "", quantity: 1 }],
-    }));
+      {
+        med,
+        quantity: 1,
+        startDate: new Date().toISOString().slice(0, 10),
+        custom: false,
+        customDosage: "",
+        customFrequency: { value: "", unit: "hours" },
+        customDuration: { value: "", unit: "days" },
+      },
+    ]);
+    setMedQuery("");
+    setPickerOpen(false);
   };
 
-  // Remove medication field
-  const handleRemoveMedication = (index) => {
-    const newMedications = formData.medications.filter((_, i) => i !== index);
-    setFormData((prev) => ({ ...prev, medications: newMedications }));
-  };
+  const updateAssigned = (index, patch) =>
+    setAssigned((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
 
-  // Handle typing medication name and filtering available medications
-  const handleMedicationChange = (index, value) => {
-    const medicationName = value;
-    const filtered = medicationsData.filter((med) =>
-      med.nameOfDrugs.toLowerCase().includes(medicationName.toLowerCase())
-    );
-    setFilteredMedications(filtered); // Show dropdown with filtered medications
+  const removeAssigned = (index) =>
+    setAssigned((prev) => prev.filter((_, i) => i !== index));
 
-    const newMedications = formData.medications.map((medication, i) =>
-      i === index ? { ...medication, nameOfDrugs: medicationName, id: "" } : medication
-    );
-    setFormData((prev) => ({ ...prev, medications: newMedications }));
-  };
+  const canSubmit =
+    form.fullName.trim() && form.dateOfBirth && form.gender && form.phoneNumber.trim();
 
-  // Handle selecting a medication from the dropdown
-  const handleSelectMedication = (index, selectedMedication) => {
-    const newMedications = formData.medications.map((medication, i) =>
-      i === index
-        ? { ...medication, nameOfDrugs: selectedMedication.nameOfDrugs, id: selectedMedication._id }
-        : medication
-    );
-    setFormData((prev) => ({ ...prev, medications: newMedications }));
-    setFilteredMedications([]); // Hide dropdown after selection
-  };
-
-  // Handle changing medication quantity
-  const handleQuantityChange = (index, value) => {
-    const newMedications = formData.medications.map((medication, i) =>
-      i === index ? { ...medication, quantity: value } : medication
-    );
-    setFormData((prev) => ({ ...prev, medications: newMedications }));
-  };
-
-  // Handle medication date changes (startDate and endDate)
-  const handleMedicationDateChange = (index, field, value) => {
-    const newMedications = formData.medications.map((medication, i) =>
-      i === index ? { ...medication, [field]: value } : medication
-    );
-  setFormData((prev) => ({ ...prev, medications: newMedications }));
-  };
-
-
-  const handleCustomToggle = (index) => {
-    const newMedications = formData.medications.map((medication, i) =>
-      i === index ? { ...medication, custom: !medication.custom } : medication
-    );
-    setFormData((prev) => ({ ...prev, medications: newMedications }));
-  };
-
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSubmit = async () => {
+    if (!canSubmit) {
+      toast.error("Full name, date of birth, gender, and phone number are required.");
+      return;
+    }
+    setSaving(true);
     try {
-      const medicationsPayload = formData.medications.map((medication) => ({
-        medication: medication.id,
-        quantity: medication.quantity,
-        startDate: medication.startDate || Date.now(),
-        endDate: medication.endDate || null, // Optional end date
-        custom: medication.custom,
-        customDosage: medication.custom ? medication.customDosage : undefined,
-        customFrequency: medication.custom ? medication.customFrequency : undefined,
-        customDuration: medication.custom ? medication.customDuration : undefined,
+      const medicationsPayload = assigned.map((a) => ({
+        medication: a.med._id,
+        quantity: Number(a.quantity) || 1,
+        startDate: a.startDate || Date.now(),
+        endDate: null,
+        custom: a.custom,
+        customDosage: a.custom ? a.customDosage : undefined,
+        customFrequency: a.custom
+          ? { value: Number(a.customFrequency.value), unit: a.customFrequency.unit }
+          : undefined,
+        customDuration: a.custom
+          ? { value: Number(a.customDuration.value), unit: a.customDuration.unit }
+          : undefined,
       }));
 
-      const response = await api.post(
-        `https://medical-api-advo.onrender.com/api/user/hospital/${hospital}/users`,
-        {
-          fullName: formData.fullName,
-          dateOfBirth: formData.dateOfBirth,
-          gender: formData.gender,
-          phoneNumber: formData.phoneNumber,
-          email: formData.email,
-          medications: medicationsPayload,
-        }
-      ).then((data)=>{
-          toast.success("User created Successfully",{duration: 5000,})
+      await api.post(`/api/user/hospital/${hospitalId}/users`, {
+        ...form,
+        medications: medicationsPayload,
       });
+      toast.success(`${form.fullName} added${assigned.length ? ` with ${assigned.length} medication(s)` : ""}.`);
       router.push("/dashboard/user");
-    } catch (error) {
-      console.error("Error creating user:", error);
-      setUserErrorMessage(error.response.data)
-      toast.error(error.response.data.message, {duration: 5000,})
-
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not create the patient.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
-  
+
   return (
-    <main className="flex-1 overflow-auto p-6">
-      <div className="grid gap-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">New patient</h1>
+          <p className="text-sm text-muted-foreground">
+            Add their details and, optionally, assign medications in the same step.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/dashboard/user")}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={saving || !canSubmit} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            {saving ? "Saving…" : "Create patient"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr,1.2fr]">
+        {/* ---------- Patient details ---------- */}
         <Card>
-          <CardHeader>
-            <CardTitle>Create User</CardTitle>
-            <CardDescription>Fill out the form to add a new user.</CardDescription>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">Patient details</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form className="grid gap-4" onSubmit={handleSubmit}>
-              {/* User Details Fields */}
-              <div className="grid gap-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  placeholder="John Doe"
-                  value={formData.fullName}
-                  onChange={handleInputChange}
-                 className="capitalize" 
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dateOfBirth">Date of Birth</Label>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="fullName">Full name *</Label>
+              <Input
+                id="fullName"
+                value={form.fullName}
+                onChange={(e) => setField("fullName", e.target.value)}
+                placeholder="e.g. Chief Emeka Nwosu"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="dateOfBirth">Date of birth *</Label>
                 <Input
                   id="dateOfBirth"
                   type="date"
-                  value={formData.dateOfBirth}
-                  onChange={handleInputChange}
-                  required
+                  value={form.dateOfBirth}
+                  onChange={(e) => setField("dateOfBirth", e.target.value)}
                 />
               </div>
-              <div className="grid gap-2 w-full">
-                <Label htmlFor="gender">Gender</Label>
-                <Select onValueChange={handleGenderChange}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select Gender" />
+              <div className="grid gap-1.5">
+                <Label>Gender *</Label>
+                <Select value={form.gender} onValueChange={(v) => setField("gender", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="male">Male</SelectItem>
@@ -248,218 +192,254 @@ export default function CreateUser() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phoneNumber">Phone Number</Label>
-                <Input
-                  id="phoneNumber"
-                  placeholder="123-456-7890"
-                  value={formData.phoneNumber}
-                  onChange={handleInputChange}
-                  required
-                />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="phoneNumber">Phone number *</Label>
+              <Input
+                id="phoneNumber"
+                value={form.phoneNumber}
+                onChange={(e) => setField("phoneNumber", e.target.value)}
+                placeholder="+234…"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setField("email", e.target.value)}
+                placeholder="Used for medication schedule emails"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ---------- Medication assignment ---------- */}
+        <Card>
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Medications</CardTitle>
+                <CardDescription>Assigned now — stock is reserved on creation</CardDescription>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="johndoe@example.com"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-               {/* Medication Section */}
-               <div className="grid gap-4 rounded-lg">
-  <Label className="text-lg font-semibold text-gray-700">Medications</Label>
-  {formData.medications.map((medication, index) => (
-    <div
-      key={index}
-      className="flex flex-col gap-4 p-4 border border-gray-200 rounded-lg bg-white relative shadow-sm"
-      ref={wrapperRef}
-    >
-      {/* Medication Name & Quantity */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col">
-          <Label className="text-sm font-medium text-gray-600">Medication Name</Label>
-          <Input
-            type="text"
-            placeholder="Medication Name"
-            value={medication.nameOfDrugs}
-            onFocus={() => setActiveMedicationIndex(index)} // Set active index on focus
-            onBlur={() => setTimeout(() => setActiveMedicationIndex(null), 200)} // Clear the active index after blur (with a delay)
-            onChange={(e) => handleMedicationChange(index, e.target.value)}
-            className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            required
-          />
-        </div>
-        <div className="flex flex-col">
-          <Label className="text-sm font-medium text-gray-600">Quantity</Label>
-          <Input
-            type="number"
-            placeholder="Quantity"
-            value={medication.quantity}
-            onChange={(e) => handleQuantityChange(index, e.target.value)}
-            min="1"
-            className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            required
-          />
-        </div>
-      </div>
-
-      {/* Medication Suggestions Dropdown (show only for the active input) */}
-      {filteredMedications.length > 0 && activeMedicationIndex === index && (
-        <ul className="absolute top-20 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10">
-          {filteredMedications.map((med) => (
-            <li
-              key={med._id}
-              className="p-4 hover:bg-blue-50 cursor-pointer flex items-center justify-between"
-              onClick={() => handleSelectMedication(index, med)}
-            >
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-gray-700">{med.nameOfDrugs}</span>
-                <span className="text-xs text-gray-500">Dosage: {med.dosage || 'N/A'}</span>
-                <span className="text-xs text-gray-400">{med.description || 'No description available'}</span>
-              </div>
-              <span className="text-xs text-blue-600 hover:underline">Select</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Start Date & End Date */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col">
-          <Label className="text-sm font-medium text-gray-600 ">Start Date</Label>
-          <Input
-            type="datetime-local"
-            value={medication.startDate || ''}
-            onChange={(e) => handleMedicationDateChange(index, 'startDate', e.target.value)}
-            className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-300 "
-          />
-        </div>        
-      </div>
-      
-      {/* custom  */}
-      <div>
-       <div className="flex items-center mb-3">
-                    <Checkbox
-                      id={`${medication.id}`}
-                      checked={medication.custom}
-                      onCheckedChange={() => handleCustomToggle(index)}
-                      className="mr-2"
-                    />
-                    <Label> Add Custom Medication</Label>
-                  </div>
-
-                  {/* Custom Medication Fields */}
-                  {medication.custom && (
-                    <div className="grid gap-4">
-                      
-                      <div>
-                      <Label>
-                        Custom Duration
-                      </Label>
-
-                        <Input
-                          placeholder="Custom Dosage"
-                          value={medication.customDosage}
-                          onChange={(e) => handleChange({ target: { id: 'customDosage', value: e.target.value } }, index)}
-                        />
-                      </div>
-
-                      {/* Custom Frequency */}
-                      <div>
-                      <Label>
-                        Custom Frequency
-                      </Label>
-                      <div className="flex">
-                        <Input
-                          id="frequencyValue"
-                          type="number"
-                          placeholder="6"
-                          value={medication.customFrequency.value}
-                          min="0"
-                          onChange={(e) => handleChange(e, index)}
-                        />
-                        <Select
-                          value={medication.customFrequency.unit}
-                          onValueChange={(value) => handleChange({ target: { id: 'frequencyUnit', value } }, index)}
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Hours" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hours">Hours</SelectItem>
-                            <SelectItem value="days">Days</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        </div>
-                      </div>
-
-                      {/* Custom Duration */}
-                      <div >
-                      <Label>
-                        Custom Duration
-                      </Label>
-
-                      <div className="flex">
-                          <Input
-                            id="durationValue"
-                            type="number"
-                            placeholder="7"
-                            value={medication.customDuration.value}
-                            min="0"
-                            onChange={(e) => handleChange(e, index)}
-                          />
-                          <Select
-                            value={medication.customDuration.unit}
-                            onValueChange={(value) => handleChange({ target: { id: 'durationUnit', value } }, index)}
+              {assigned.length > 0 && (
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                  {assigned.length}
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {/* Picker */}
+            <div className="relative" ref={pickerRef}>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={medQuery}
+                onFocus={() => setPickerOpen(true)}
+                onChange={(e) => {
+                  setMedQuery(e.target.value);
+                  setPickerOpen(true);
+                }}
+                placeholder="Search inventory to assign…"
+                className="pl-9"
+              />
+              {pickerOpen && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-lg">
+                  {!inventory ? (
+                    <div className="space-y-2 p-3">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : suggestions.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-muted-foreground">
+                      No matching medications in inventory.
+                    </p>
+                  ) : (
+                    <ul className="max-h-56 overflow-y-auto rosek-scroll">
+                      {suggestions.map((m) => (
+                        <li key={m._id}>
+                          <button
+                            type="button"
+                            onClick={() => assign(m)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
                           >
-                            <SelectTrigger className="w-[180px]">
-                              <SelectValue placeholder="Days" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="days">Days</SelectItem>
-                              <SelectItem value="weeks">Weeks</SelectItem>
-                            </SelectContent>
-                          </Select>
-                       </div> 
+                            <span className="flex items-center gap-2">
+                              <Pill className="h-3.5 w-3.5 text-muted-foreground" />
+                              {m.nameOfDrugs}{" "}
+                              <span className="text-xs text-muted-foreground">
+                                {m.dosage} · {m.dosageForm}
+                              </span>
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              {m.quantityInStock} in stock <Plus className="h-3.5 w-3.5" />
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Assigned list */}
+            {assigned.length === 0 ? (
+              <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed py-8 text-center">
+                <Pill className="h-5 w-5 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">
+                  No medications assigned yet — you can also do this later.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {assigned.map((a, i) => (
+                  <li key={a.med._id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {a.med.nameOfDrugs}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            {a.med.dosage} · {a.med.dosageForm}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Default: every {a.med.frequency?.value} {a.med.frequency?.unit} for{" "}
+                          {a.med.duration?.value} {a.med.duration?.unit}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeAssigned(i)}
+                        aria-label={`Remove ${a.med.nameOfDrugs}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-1">
+                        <Label className="text-xs">Quantity</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={a.med.quantityInStock}
+                          value={a.quantity}
+                          onChange={(e) => updateAssigned(i, { quantity: e.target.value })}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs">Start date</Label>
+                        <Input
+                          type="date"
+                          value={a.startDate}
+                          onChange={(e) => updateAssigned(i, { startDate: e.target.value })}
+                          className="h-9"
+                        />
                       </div>
                     </div>
-                  )}
-      </div>
 
-      {/* Remove Medication Button */}
-      <Button
-        type="button"
-        onClick={() => handleRemoveMedication(index)}
-        className="inline-block bg-red-500 text-white rounded-md p-2 mt-4 hover:bg-red-600"
-      >
-        Remove
-      </Button>
-    </div>
-    ))}
+                    {/* Custom regimen */}
+                    <div className="mt-3 flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                      <div>
+                        <p className="text-xs font-medium">Custom regimen</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Override the default dosage and schedule
+                        </p>
+                      </div>
+                      <Switch
+                        checked={a.custom}
+                        onCheckedChange={(v) => updateAssigned(i, { custom: v })}
+                        aria-label="Toggle custom regimen"
+                      />
+                    </div>
 
-        {/* Add Medication Button */}
-          <Button
-            type="button"
-            onClick={handleAddMedication}
-            className=" text-white rounded-md p-2 max-w-44"
-          >
-            {formData.medications.length>0 ?"Add Another Medication":"Add Medication"}
-            
-          </Button>
-          </div>
-
-              <Button type="submit" disabled={loading} className="mt-10">
-                {loading ? "Creating..." : "Create User"}
-              </Button>
-            </form>
+                    {a.custom && (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <div className="grid gap-1">
+                          <Label className="text-xs">Dosage</Label>
+                          <Input
+                            value={a.customDosage}
+                            onChange={(e) => updateAssigned(i, { customDosage: e.target.value })}
+                            placeholder="e.g. 2.5mg"
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-xs">Every</Label>
+                          <div className="flex gap-1.5">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={a.customFrequency.value}
+                              onChange={(e) =>
+                                updateAssigned(i, {
+                                  customFrequency: { ...a.customFrequency, value: e.target.value },
+                                })
+                              }
+                              className="h-9"
+                            />
+                            <Select
+                              value={a.customFrequency.unit}
+                              onValueChange={(v) =>
+                                updateAssigned(i, {
+                                  customFrequency: { ...a.customFrequency, unit: v },
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-9 w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="hours">hours</SelectItem>
+                                <SelectItem value="days">days</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-xs">For</Label>
+                          <div className="flex gap-1.5">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={a.customDuration.value}
+                              onChange={(e) =>
+                                updateAssigned(i, {
+                                  customDuration: { ...a.customDuration, value: e.target.value },
+                                })
+                              }
+                              className="h-9"
+                            />
+                            <Select
+                              value={a.customDuration.unit}
+                              onValueChange={(v) =>
+                                updateAssigned(i, {
+                                  customDuration: { ...a.customDuration, unit: v },
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-9 w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="days">days</SelectItem>
+                                <SelectItem value="weeks">weeks</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }
-

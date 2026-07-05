@@ -1,21 +1,28 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import { useRouter } from "next/navigation";
+import axios from "axios";
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import VerifyEmail from "../components/VerifyEmail";
-import { Bars } from 'react-loader-spinner';
+import { Bars } from "react-loader-spinner";
 import api from "../axios/axiosConfig";
 export default function RegisterHospital() {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword:''
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -38,18 +45,18 @@ export default function RegisterHospital() {
     const { name, email, password, confirmPassword } = formData;
 
     if (name.length < 4) {
-      setError('Name must be at least 4 characters.');
+      setError("Name must be at least 4 characters.");
       return false;
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailPattern.test(email)) {
-      setError('Please enter a valid email address.');
+      setError("Please enter a valid email address.");
       return false;
     }
 
     if (password.length < 5) {
-      setError('Password must be at least 5 characters.');
+      setError("Password must be at least 5 characters.");
       return false;
     }
 
@@ -72,18 +79,23 @@ export default function RegisterHospital() {
     setLoading(true);
 
     try {
-      const response = await api.post('https://medical-api-advo.onrender.com/api/hospital/register', formData);
+      const response = await api.post(
+        "http://localhost:8000/api/hospital/register",
+        formData,
+      );
 
       setSuccess(true);
     } catch (error) {
-      console.log(error)
-      setError(error.response?.data?.msg || 'Registration failed. Please try again.');
+      console.log(error);
+      setError(
+        error.response?.data?.msg || "Registration failed. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  if (success) return <VerifyEmail email={formData.email}/>;
+  if (success) return <VerifyEmail email={formData.email} />;
 
   return (
     <div className="flex justify-center items-center h-screen bg-background">
@@ -149,9 +161,9 @@ export default function RegisterHospital() {
             {error && <p className="text-red-500">{error}</p>}
           </CardContent>
           <CardFooter>
-            <Button 
-              type="submit" 
-              className={`w-full ${loading ? 'bg-blue-500' : 'bg-primary'} flex justify-center items-center`} 
+            <Button
+              type="submit"
+              className={`w-full ${loading ? "bg-blue-500" : "bg-primary"} flex justify-center items-center`}
               disabled={loading}
             >
               {loading ? (
@@ -162,7 +174,9 @@ export default function RegisterHospital() {
                   ariaLabel="loading"
                   wrapperClass="mr-2"
                 />
-              ) : 'Register'}
+              ) : (
+                "Register"
+              )}
             </Button>
           </CardFooter>
         </form>

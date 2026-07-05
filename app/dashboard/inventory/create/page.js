@@ -1,351 +1,430 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import api from "@/app/axios/axiosConfig";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/app/auth/auth-context";
-import api from "@/app/axios/axiosConfig";
-import { Bars } from "react-loader-spinner";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import {
   Select,
-  SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectContent,
+  SelectItem,
 } from "@/components/ui/select";
+import { ArrowLeft, Loader2, Pill, PackagePlus, ScanBarcode } from "lucide-react";
+
+/*
+ * Add medication — two-panel workspace:
+ *  left: drug identity + default regimen
+ *  right: stock, pricing, expiry, supplier
+ * Submits the exact payload createMedicationForHospital expects.
+ */
+
+const DOSAGE_FORMS = [
+  "Tablet",
+  "Capsule",
+  "Syrup",
+  "Suspension",
+  "Injection",
+  "Cream",
+  "Ointment",
+  "Drops",
+  "Inhaler",
+  "Suppository",
+];
+
+function Field({ label, hint, required, children }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[13px]">
+        {label}
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </Label>
+      {children}
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
 
 export default function CreateMedication() {
   const router = useRouter();
-  const { hospitalData } = useAuth();
+  const [hospitalId, setHospitalId] = useState("");
+  const [suppliers, setSuppliers] = useState([]);
+  const [saving, setSaving] = useState(false);
 
-  const [medicationData, setMedicationData] = useState({
-    nameOfDrugs: '',
-    dosage: '',
-    dosageForm: '',
-    dosageAmount: '',
-    frequency: { value: '', unit: 'hours' },
-    duration: { value: '', unit: 'days' },
-    numberOfUnits: '',
-    notes: '',
-    quantityInStock: '',
-    barcode: '',
-    price: '',
-    expiryDate: '',
-    inStock: false,
-    reorderLevel: ''
+  const [form, setForm] = useState({
+    nameOfDrugs: "",
+    dosage: "",
+    dosageForm: "",
+    dosageAmount: "",
+    frequency: { value: "", unit: "hours" },
+    duration: { value: "", unit: "days" },
+    numberOfUnits: "",
+    notes: "",
+    quantityInStock: "",
+    barcode: "",
+    preferredSupplier: "",
+    price: "",
+    expiryDate: "",
+    reorderLevel: "10",
   });
 
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState('');
+  useEffect(() => {
+    const id = localStorage.getItem("_id");
+    setHospitalId(id);
+    if (!id) return;
+    api
+      .get(`/api/supplier/${id}?active=true`)
+      .then((res) => setSuppliers(res.data || []))
+      .catch(() => setSuppliers([]));
+  }, []);
 
-  const handleChange = (e) => {
-    const { id, value, type, checked } = e.target;
-    if (id.includes('frequency') || id.includes('duration')) {
-      const [field, subField] = id.split(/(?=[A-Z])/);
-      setMedicationData((prev) => ({
-        ...prev,
-        [field]: {
-          ...prev[field],
-          [subField.toLowerCase()]: value
-        }
-      }));
-    } else {
-      setMedicationData((prev) => ({
-        ...prev,
-        [id]: type === 'checkbox' ? checked : value
-      }));
-    }
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setNested = (key, sub, value) =>
+    setForm((prev) => ({ ...prev, [key]: { ...prev[key], [sub]: value } }));
+
+  const missing = () => {
+    if (!form.nameOfDrugs.trim()) return "Drug name is required";
+    if (!form.dosage.trim()) return "Dosage is required";
+    if (!form.dosageForm) return "Dosage form is required";
+    if (!form.dosageAmount) return "Dosage amount is required";
+    if (!form.frequency.value) return "Frequency is required";
+    if (!form.duration.value) return "Duration is required";
+    if (!form.numberOfUnits) return "Units per pack is required";
+    if (form.quantityInStock === "") return "Opening stock is required";
+    if (form.price === "") return "Selling price is required";
+    if (!form.expiryDate) return "Expiry date is required";
+    return null;
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!medicationData.nameOfDrugs) newErrors.nameOfDrugs = "Name is required.";
-    if (!medicationData.dosage) newErrors.dosage = "Dosage is required.";
-    if (!medicationData.dosageForm) newErrors.dosageForm = "Dosage form is required.";
-    if (medicationData.dosageAmount <= 0 || isNaN(medicationData.dosageAmount)) newErrors.dosageAmount = "Dosage amount must be a positive number.";
-    if (medicationData.frequency.value <= 0 || isNaN(medicationData.frequency.value)) newErrors.frequencyValue = "Frequency value must be a positive number.";
-    if (medicationData.duration.value <= 0 || isNaN(medicationData.duration.value)) newErrors.durationValue = "Duration value must be a positive number.";
-    if (medicationData.numberOfUnits <= 0 || isNaN(medicationData.numberOfUnits)) newErrors.numberOfUnits = "Number of units must be a positive number.";
-    if (medicationData.quantityInStock <= 0 || isNaN(medicationData.quantityInStock)) newErrors.quantityInStock = "Quantity in stock must be a positive number.";
-    if (medicationData.price <= 0 || isNaN(medicationData.price)) newErrors.price = "Price must be a positive number.";
-    if (!medicationData.expiryDate) newErrors.expiryDate = "Expiry date is required.";
-
-    // Check if expiryDate is in the future
-    const currentDate = new Date();
-    const expiryDate = new Date(medicationData.expiryDate);
-    if (expiryDate <= currentDate) newErrors.expiryDate = "Expiry date must be higher than current year or month";
-
-    return newErrors;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrors({});
-    setSuccess('');
-
-    const formErrors = validateForm();
-    if (Object.keys(formErrors).length > 0) {
-      setErrors(formErrors);
-      setLoading(false);
+  const submit = async () => {
+    const problem = missing();
+    if (problem) {
+      toast.error(problem);
       return;
     }
-
+    setSaving(true);
     try {
-      await api.post(
-        `https://medical-api-advo.onrender.com/api/medication/${hospitalData._id}/medications`,
-        medicationData
-      );
-      setSuccess('Product created successfully!');
-      toast.success("Product created successfully!");
-      setMedicationData({
-        nameOfDrugs: '',
-        dosage: '',
-        dosageForm: '',
-        dosageAmount: '',
-        frequency: { value: '', unit: 'hours' },
-        duration: { value: '', unit: 'days' },
-        numberOfUnits: '',
-        notes: '',
-        quantityInStock: '',
-        barcode: '',
-        price: '',
-        expiryDate: '',
-        inStock: false,
-        reorderLevel: ''
-      });
+      const payload = {
+        nameOfDrugs: form.nameOfDrugs.trim(),
+        dosage: form.dosage.trim(),
+        dosageForm: form.dosageForm,
+        dosageAmount: Number(form.dosageAmount),
+        frequency: {
+          value: Number(form.frequency.value),
+          unit: form.frequency.unit,
+        },
+        duration: {
+          value: Number(form.duration.value),
+          unit: form.duration.unit,
+        },
+        numberOfUnits: Number(form.numberOfUnits),
+        notes: form.notes.trim(),
+        quantityInStock: Number(form.quantityInStock),
+        barcode: form.barcode.trim(),
+        preferredSupplier: form.preferredSupplier || undefined,
+        price: Number(form.price),
+        expiryDate: form.expiryDate,
+        reorderLevel: Number(form.reorderLevel) || 10,
+      };
+      await api.post(`/api/medication/${hospitalId}/medications`, payload);
+      toast.success(`${payload.nameOfDrugs} added to inventory`);
       router.push("/dashboard/inventory");
     } catch (error) {
-      setErrors({ general: error.response?.data?.message || 'Error creating product. Please try again.' });
+      toast.error(
+        error.response?.data?.message || "Could not add the medication. Try again."
+      );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
-    <main className="flex-1 overflow-auto p-6">
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Product</CardTitle>
-            <CardDescription>Fill out the form to add a new product to your inventory.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="grid gap-4" onSubmit={handleSubmit}>
-              {errors.general && <div className="text-red-500">{errors.general}</div>}
-              <div className="grid gap-2">
-                <Label htmlFor="nameOfDrugs">Name</Label>
-                <Input
-                  id="nameOfDrugs"
-                  placeholder="Aspirin"
-                  value={medicationData.nameOfDrugs}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.nameOfDrugs && <div className="text-red-500">{errors.nameOfDrugs}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dosage">Dosage</Label>
-                <Input
-                  id="dosage"
-                  placeholder="100 mg"
-                  value={medicationData.dosage}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.dosage && <div className="text-red-500">{errors.dosage}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dosageForm">Dosage Form</Label>
-                <Input
-                  id="dosageForm"
-                  placeholder="Tablet"
-                  value={medicationData.dosageForm}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.dosageForm && <div className="text-red-500">{errors.dosageForm}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dosageAmount">Dosage Amount</Label>
-                <Input
-                  id="dosageAmount"
-                  type="number"
-                  placeholder="2"
-                  value={medicationData.dosageAmount}
-                  onChange={handleChange}
-                  min="0" // Ensures non-negative values
-                  required
-                />
-                {errors.dosageAmount && <div className="text-red-500">{errors.dosageAmount}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="frequency">Frequency</Label>
-                <div className="flex items-center space-x-4">
-                  <Input
-                    id="frequencyValue"
-                    type="number"
-                    placeholder="6"
-                    value={medicationData.frequency.value}
-                    onChange={handleChange}
-                    min="0" // Ensures non-negative values
-                    required
-                  />
-                  {errors.frequencyValue && <div className="text-red-500">{errors.frequencyValue}</div>}
-                  <Select
-                    value={medicationData.frequency.unit}
-                    onValueChange={(value) => handleChange({ target: { id: 'frequencyUnit', value } })}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Hours" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hours">Hours</SelectItem>
-                      <SelectItem value="days">Days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.frequencyUnit && <div className="text-red-500">{errors.frequencyUnit}</div>}
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="duration">Duration</Label>
-                <div className="flex items-center space-x-4">
-                  <Input
-                    id="durationValue"
-                    type="number"
-                    placeholder="5"
-                    value={medicationData.duration.value}
-                    onChange={handleChange}
-                    min="0" // Ensures non-negative values
-                    required
-                  />
-                  {errors.durationValue && <div className="text-red-500">{errors.durationValue}</div>}
-                  <Select
-                    value={medicationData.duration.unit}
-                    onValueChange={(value) => handleChange({ target: { id: 'durationUnit', value } })}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Days" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="days">Days</SelectItem>
-                      <SelectItem value="weeks">Weeks</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.durationUnit && <div className="text-red-500">{errors.durationUnit}</div>}
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="numberOfUnits">Number of Units</Label>
-                <Input
-                  id="numberOfUnits"
-                  type="number"
-                  placeholder="10"
-                  value={medicationData.numberOfUnits}
-                  onChange={handleChange}
-                  min="0" // Ensures non-negative values
-                  required
-                />
-                {errors.numberOfUnits && <div className="text-red-500">{errors.numberOfUnits}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="quantityInStock">Quantity in Stock</Label>
-                <Input
-                  id="quantityInStock"
-                  type="number"
-                  placeholder="50"
-                  value={medicationData.quantityInStock}
-                  onChange={handleChange}
-                  min="0" // Ensures non-negative values
-                  required
-                />
-                {errors.quantityInStock && <div className="text-red-500">{errors.quantityInStock}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="price">Price</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  placeholder="20"
-                  value={medicationData.price}
-                  onChange={handleChange}
-                  min="0" // Ensures non-negative values
-                  step=".01"
-                  required
-                />
-                {errors.price && <div className="text-red-500">{errors.price}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="expiryDate">Expiry Date</Label>
-                <Input
-                  id="expiryDate"
-                  type="date"
-                  value={medicationData.expiryDate}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.expiryDate && <div className="text-red-500">{errors.expiryDate}</div>}
-              </div>
-              <div className="flex items-center space-x-4">
-                <Input
-                  id="inStock"
-                  type="checkbox"
-                  checked={medicationData.inStock}
-                  onChange={handleChange}
-                />
-                <Label htmlFor="inStock">In Stock</Label>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Input
-                  id="notes"
-                  placeholder="Additional notes"
-                  value={medicationData.notes}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="barcode">Barcode</Label>
-                <Input
-                  id="barcode"
-                  placeholder="123456789"
-                  value={medicationData.barcode}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="reorderLevel">Reorder Level</Label>
-                <Input
-                  id="reorderLevel"
-                  type="number"
-                  placeholder="10"
-                  value={medicationData.reorderLevel}
-                  onChange={handleChange}
-                  min="0" // Ensures non-negative values
-                />
-              </div>
-              <Button type="submit" disabled={loading} className="mt-4">
-                {loading ? (
-                  <Bars
-                    height="20"
-                    width="20"
-                    color="#ffffff"
-                    ariaLabel="bars-loading"
-                    wrapperClass="flex justify-center items-center"
-                  />
-                ) : (
-                  "Create Product"
-                )}
-              </Button>
-              {success && <div className="text-green-500 mt-4">{success}</div>}
-            </form>
-          </CardContent>
-        </Card>
+    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+            <Link href="/dashboard/inventory">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">
+              Add medication
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              New product for your inventory
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/inventory">Cancel</Link>
+          </Button>
+          <Button onClick={submit} disabled={saving} className="gap-2">
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <PackagePlus className="h-4 w-4" />
+            )}
+            Add medication
+          </Button>
+        </div>
       </div>
-    </main>
+
+      <div className="grid gap-4 lg:grid-cols-5">
+        {/* Left: drug identity + regimen */}
+        <div className="flex flex-col gap-4 lg:col-span-3">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Pill className="h-4 w-4 text-primary" /> Drug details
+              </CardTitle>
+              <CardDescription>What the medication is</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Field label="Drug name" required>
+                  <Input
+                    placeholder="e.g. Amoxicillin"
+                    value={form.nameOfDrugs}
+                    onChange={(e) => set("nameOfDrugs", e.target.value)}
+                  />
+                </Field>
+              </div>
+              <Field label="Dosage strength" required>
+                <Input
+                  placeholder="e.g. 500mg"
+                  value={form.dosage}
+                  onChange={(e) => set("dosage", e.target.value)}
+                />
+              </Field>
+              <Field label="Dosage form" required>
+                <Select
+                  value={form.dosageForm}
+                  onValueChange={(v) => set("dosageForm", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOSAGE_FORMS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Units per pack" hint="Tablets or doses in one pack" required>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 20"
+                  value={form.numberOfUnits}
+                  onChange={(e) => set("numberOfUnits", e.target.value)}
+                />
+              </Field>
+              <Field label="Barcode / NAFDAC number" hint="Used by inventory search">
+                <div className="relative">
+                  <ScanBarcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="e.g. A4-0163"
+                    value={form.barcode}
+                    onChange={(e) => set("barcode", e.target.value)}
+                  />
+                </div>
+              </Field>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Default regimen</CardTitle>
+              <CardDescription>
+                Applied when this drug is assigned to a patient (can be
+                overridden per patient)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-3">
+              <Field label="Dose per intake" required>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 2"
+                  value={form.dosageAmount}
+                  onChange={(e) => set("dosageAmount", e.target.value)}
+                />
+              </Field>
+              <Field label="Frequency" required>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 8"
+                    value={form.frequency.value}
+                    onChange={(e) =>
+                      setNested("frequency", "value", e.target.value)
+                    }
+                  />
+                  <Select
+                    value={form.frequency.unit}
+                    onValueChange={(v) => setNested("frequency", "unit", v)}
+                  >
+                    <SelectTrigger className="w-28 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hours">hours</SelectItem>
+                      <SelectItem value="days">days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Field>
+              <Field label="Duration" required>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 7"
+                    value={form.duration.value}
+                    onChange={(e) =>
+                      setNested("duration", "value", e.target.value)
+                    }
+                  />
+                  <Select
+                    value={form.duration.unit}
+                    onValueChange={(v) => setNested("duration", "unit", v)}
+                  >
+                    <SelectTrigger className="w-28 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="days">days</SelectItem>
+                      <SelectItem value="weeks">weeks</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Field>
+              <div className="sm:col-span-3">
+                <Field label="Notes">
+                  <Textarea
+                    rows={3}
+                    placeholder="e.g. Take with food. Avoid alcohol."
+                    value={form.notes}
+                    onChange={(e) => set("notes", e.target.value)}
+                  />
+                </Field>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: stock, pricing, supplier */}
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Stock &amp; pricing</CardTitle>
+              <CardDescription>Opening stock and shelf details</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <Field
+                label="Opening stock"
+                hint="Future deliveries should be received as batches from Stock ledger or a purchase order"
+                required
+              >
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 200"
+                  value={form.quantityInStock}
+                  onChange={(e) => set("quantityInStock", e.target.value)}
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Selling price (₦)" required>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 1500"
+                    value={form.price}
+                    onChange={(e) => set("price", e.target.value)}
+                  />
+                </Field>
+                <Field label="Reorder level" hint="Low-stock alert threshold">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.reorderLevel}
+                    onChange={(e) => set("reorderLevel", e.target.value)}
+                  />
+                </Field>
+              </div>
+              <Field label="Expiry date" required>
+                <Input
+                  type="date"
+                  value={form.expiryDate}
+                  onChange={(e) => set("expiryDate", e.target.value)}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Supplier</CardTitle>
+              <CardDescription>
+                Preferred supplier for reordering this drug
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <Select
+                value={form.preferredSupplier}
+                onValueChange={(v) =>
+                  set("preferredSupplier", v === "none" ? "" : v)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a supplier (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No preferred supplier</SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {suppliers.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  No suppliers yet —{" "}
+                  <Link
+                    href="/dashboard/suppliers"
+                    className="font-medium text-primary hover:underline"
+                  >
+                    add one
+                  </Link>{" "}
+                  to enable purchase orders and batch traceability.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
   );
 }

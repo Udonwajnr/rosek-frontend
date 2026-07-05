@@ -1,247 +1,405 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter, useParams } from "next/navigation";
+import api from "@/app/axios/axiosConfig";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from "@/components/ui/select";
-import { Bars } from "react-loader-spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import api from "@/app/axios/axiosConfig";
-import { useRouter, useParams } from "next/navigation";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import {
+  ArrowLeft,
+  Loader2,
+  Save,
+  Layers,
+  SlidersHorizontal,
+  PackagePlus,
+} from "lucide-react";
 
-export default function EditProductInventory() {
+const DOSAGE_FORMS = [
+  "Tablet",
+  "Capsule",
+  "Syrup",
+  "Suspension",
+  "Injection",
+  "Cream",
+  "Ointment",
+  "Drops",
+  "Inhaler",
+  "Suppository",
+];
+
+const naira = (n) => `₦${Number(n || 0).toLocaleString()}`;
+const shortDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
+
+function BatchStatusPill({ batch }) {
+  const map = {
+    active: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    depleted: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+    expired: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+    written_off: "bg-slate-100 text-slate-500 line-through dark:bg-slate-800 dark:text-slate-400",
+  };
+  const label = {
+    active: "Active",
+    depleted: "Depleted",
+    expired: "Expired",
+    written_off: "Written off",
+  };
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${map[batch.status] || map.active}`}
+    >
+      {label[batch.status] || batch.status}
+    </span>
+  );
+}
+
+export default function EditMedication() {
   const router = useRouter();
   const { id } = useParams();
-  const [product, setProduct] = useState(null);
-  const [medicationData, setMedicationData] = useState({
-    nameOfDrugs: '',
-    dosage: '',
-    dosageForm: '',
-    dosageAmount: '',
-    frequency: { value: '', unit: 'hours' },
-    duration: { value: '', unit: 'days' },
-    numberOfUnits: '',
-    notes: '',
-    quantityInStock: '',
-    barcode: '',
-    price: '',
-    expiryDate: '',
-    inStock: false,
-    reorderLevel: ''
-  });
-  const [errors, setErrors] = useState({});
+  const [hospitalId, setHospitalId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [suppliers, setSuppliers] = useState([]);
+  const [batches, setBatches] = useState(null);
+  const [stockNow, setStockNow] = useState(0);
+
+  const [form, setForm] = useState(null);
+
+  // Adjust-stock sheet
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjust, setAdjust] = useState({ quantityChange: "", type: "adjusted", reason: "" });
+  const [adjusting, setAdjusting] = useState(false);
+
+  const loadBatches = (hid) =>
+    api
+      .get(`/api/stock/${hid}/batches?medicationId=${id}`)
+      .then((res) => setBatches(res.data || []))
+      .catch(() => setBatches([]));
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const hospitalId = localStorage.getItem("_id");
-        const response = await api.get(
-          `https://medical-api-advo.onrender.com/api/medication/${hospitalId}/medications/${id}`
-        );
-        setProduct(response.data);
-        setMedicationData({
-          ...response.data,
-          frequency: { value: response.data.frequency.value, unit: response.data.frequency.unit },
-          duration: { value: response.data.duration.value, unit: response.data.duration.unit }
+    const hid = localStorage.getItem("_id");
+    setHospitalId(hid);
+    if (!hid || !id) return;
+
+    Promise.all([
+      api.get(`/api/medication/${hid}/medications/${id}`),
+      api.get(`/api/supplier/${hid}?active=true`).catch(() => ({ data: [] })),
+    ])
+      .then(([medRes, supRes]) => {
+        const m = medRes.data;
+        setForm({
+          nameOfDrugs: m.nameOfDrugs || "",
+          dosage: m.dosage || "",
+          dosageForm: m.dosageForm || "",
+          dosageAmount: m.dosageAmount ?? "",
+          frequency: {
+            value: m.frequency?.value ?? "",
+            unit: m.frequency?.unit || "hours",
+          },
+          duration: {
+            value: m.duration?.value ?? "",
+            unit: m.duration?.unit || "days",
+          },
+          numberOfUnits: m.numberOfUnits ?? "",
+          notes: m.notes || "",
+          barcode: m.barcode || "",
+          preferredSupplier: m.preferredSupplier?._id || m.preferredSupplier || "",
+          price: m.price ?? "",
+          expiryDate: m.expiryDate ? m.expiryDate.slice(0, 10) : "",
+          reorderLevel: m.reorderLevel ?? 10,
         });
-      } catch (err) {
-        toast.error("Failed to fetch product data");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+        setStockNow(m.quantityInStock || 0);
+        setSuppliers(supRes.data || []);
+      })
+      .catch(() => {
+        toast.error("Could not load this medication");
+        router.push("/dashboard/inventory");
+      })
+      .finally(() => setLoading(false));
+
+    loadBatches(hid);
   }, [id]);
 
-  const handleChange = (e) => {
-    const { id, value, type, checked } = e.target;
-    if (id.includes('frequency') || id.includes('duration')) {
-      const [field, subField] = id.split(/(?=[A-Z])/);
-      setMedicationData((prev) => ({
-        ...prev,
-        [field]: {
-          ...prev[field],
-          [subField.toLowerCase()]: value
-        }
-      }));
-    } else {
-      setMedicationData((prev) => ({
-        ...prev,
-        [id]: type === 'checkbox' ? checked : value
-      }));
-    }
-  };
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setNested = (key, sub, value) =>
+    setForm((prev) => ({ ...prev, [key]: { ...prev[key], [sub]: value } }));
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!medicationData.nameOfDrugs) newErrors.nameOfDrugs = "Name is required.";
-    if (!medicationData.dosage) newErrors.dosage = "Dosage is required.";
-    if (!medicationData.dosageForm) newErrors.dosageForm = "Dosage form is required.";
-    if (medicationData.dosageAmount <= 0 || isNaN(medicationData.dosageAmount)) newErrors.dosageAmount = "Dosage amount must be a positive number.";
-    if (medicationData.frequency.value <= 0 || isNaN(medicationData.frequency.value)) newErrors.frequencyValue = "Frequency value must be a positive number.";
-    if (medicationData.duration.value <= 0 || isNaN(medicationData.duration.value)) newErrors.durationValue = "Duration value must be a positive number.";
-    if (medicationData.numberOfUnits <= 0 || isNaN(medicationData.numberOfUnits)) newErrors.numberOfUnits = "Number of units must be a positive number.";
-    if (medicationData.quantityInStock <= 0 || isNaN(medicationData.quantityInStock)) newErrors.quantityInStock = "Quantity in stock must be a positive number.";
-    if (medicationData.price <= 0 || isNaN(medicationData.price)) newErrors.price = "Price must be a positive number.";
-    if (!medicationData.expiryDate) newErrors.expiryDate = "Expiry date is required.";
+  const submit = async () => {
+    if (!form.nameOfDrugs.trim()) return toast.error("Drug name is required");
+    if (!form.dosage.trim()) return toast.error("Dosage is required");
+    if (form.price === "") return toast.error("Selling price is required");
 
-    // Check if expiryDate is in the future
-    const currentDate = new Date();
-    const expiryDate = new Date(medicationData.expiryDate);
-    if (expiryDate <= currentDate) newErrors.expiryDate = "Expiry date must be in the future.";
-
-    return newErrors;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
     setSaving(true);
-    setErrors({});
-
-    const formErrors = validateForm();
-    if (Object.keys(formErrors).length > 0) {
-      setErrors(formErrors);
-      setSaving(false);
-      return;
-    }
-
     try {
-      const hospitalId = localStorage.getItem("_id");
-      await api.put(
-        `https://medical-api-advo.onrender.com/api/medication/${hospitalId}/medications/${id}`,
-        medicationData
-      );
-      toast.success("Medication updated successfully!");
+      await api.put(`/api/medication/${hospitalId}/medications/${id}`, {
+        nameOfDrugs: form.nameOfDrugs.trim(),
+        dosage: form.dosage.trim(),
+        dosageForm: form.dosageForm,
+        dosageAmount: Number(form.dosageAmount),
+        frequency: { value: Number(form.frequency.value), unit: form.frequency.unit },
+        duration: { value: Number(form.duration.value), unit: form.duration.unit },
+        numberOfUnits: Number(form.numberOfUnits),
+        notes: form.notes.trim(),
+        barcode: form.barcode.trim(),
+        preferredSupplier: form.preferredSupplier || null,
+        price: Number(form.price),
+        expiryDate: form.expiryDate,
+        reorderLevel: Number(form.reorderLevel) || 10,
+      });
+      toast.success("Medication updated");
       router.push("/dashboard/inventory");
     } catch (error) {
-      setErrors({ general: error.response?.data?.message || 'Error updating product. Please try again.' });
-      toast.error('Failed to update product');
-      console.log(error)
+      toast.error(error.response?.data?.message || "Could not save changes. Try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
+  const submitAdjustment = async () => {
+    const change = Number(adjust.quantityChange);
+    if (!change) return toast.error("Enter a non-zero quantity (use - to remove stock)");
+    if (!adjust.reason.trim()) return toast.error("A reason is required for every adjustment");
+    setAdjusting(true);
+    try {
+      const res = await api.post(`/api/stock/${hospitalId}/adjust`, {
+        medicationId: id,
+        quantityChange: change,
+        type: adjust.type,
+        reason: adjust.reason.trim(),
+      });
+      setStockNow(res.data.medication.quantityInStock);
+      toast.success(`Stock ${change > 0 ? "increased" : "reduced"} by ${Math.abs(change)}`);
+      setAdjustOpen(false);
+      setAdjust({ quantityChange: "", type: "adjusted", reason: "" });
+      loadBatches(hospitalId);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Adjustment failed");
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
+  if (loading || !form) {
     return (
-      <div className="p-6">
-        <Skeleton className="h-10 mb-4" />
-        <Skeleton className="h-5 mb-4" />
-        <Skeleton className="h-5 mb-4" />
-        <Skeleton className="h-10 mb-4" />
+      <div className="mx-auto flex max-w-6xl flex-col gap-4">
+        <Skeleton className="h-9 w-64" />
+        <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+          <Skeleton className="h-[480px]" />
+          <Skeleton className="h-[480px]" />
+        </div>
       </div>
     );
   }
-  const hospitalId = localStorage.getItem("_id");
-  console.log(hospitalId)
 
   return (
-    <main className="flex-1 overflow-auto p-6">
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit Product</CardTitle>
-            <CardDescription>Update the details of the product below.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="grid gap-4">
-              {errors.general && <div className="text-red-500">{errors.general}</div>}
-              <div className="grid gap-2">
-                <Label htmlFor="nameOfDrugs">Name</Label>
+    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+            <Link href="/dashboard/inventory">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">
+              Edit {form.nameOfDrugs}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {form.dosage} · {form.dosageForm || "—"}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/inventory">Cancel</Link>
+          </Button>
+          <Button onClick={submit} disabled={saving} className="gap-2">
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save changes
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[1fr_380px]">
+        {/* Left: product details */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Product</CardTitle>
+              <CardDescription>What this medication is</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="nameOfDrugs">Drug name</Label>
                 <Input
                   id="nameOfDrugs"
-                  value={medicationData.nameOfDrugs}
-                  onChange={handleChange}
-                  placeholder="Aspirin"
-                  required
+                  value={form.nameOfDrugs}
+                  onChange={(e) => set("nameOfDrugs", e.target.value)}
                 />
-                {errors.nameOfDrugs && <div className="text-red-500">{errors.nameOfDrugs}</div>}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dosage">Dosage</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="dosage">Strength / dosage</Label>
                 <Input
                   id="dosage"
-                  value={medicationData.dosage}
-                  onChange={handleChange}
-                  placeholder="100 mg"
-                  required
+                  placeholder="500mg"
+                  value={form.dosage}
+                  onChange={(e) => set("dosage", e.target.value)}
                 />
-                {errors.dosage && <div className="text-red-500">{errors.dosage}</div>}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dosageForm">Dosage Form</Label>
+              <div className="space-y-1.5">
+                <Label>Dosage form</Label>
+                <Select
+                  value={form.dosageForm}
+                  onValueChange={(v) => set("dosageForm", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOSAGE_FORMS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="barcode">Barcode / NAFDAC no.</Label>
                 <Input
-                  id="dosageForm"
-                  value={medicationData.dosageForm}
-                  onChange={handleChange}
-                  placeholder="Tablet"
-                  required
+                  id="barcode"
+                  placeholder="Optional"
+                  value={form.barcode}
+                  onChange={(e) => set("barcode", e.target.value)}
                 />
-                {errors.dosageForm && <div className="text-red-500">{errors.dosageForm}</div>}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="dosageAmount">Dosage Amount</Label>
+              <div className="space-y-1.5">
+                <Label>Preferred supplier</Label>
+                <Select
+                  value={form.preferredSupplier || "none"}
+                  onValueChange={(v) => set("preferredSupplier", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s._id} value={s._id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Default regimen</CardTitle>
+              <CardDescription>
+                Used when assigning this drug to a patient
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="dosageAmount">Units per intake</Label>
                 <Input
                   id="dosageAmount"
                   type="number"
-                  value={medicationData.dosageAmount}
-                  onChange={handleChange}
-                  placeholder="2"
                   min="0"
-                  required
+                  value={form.dosageAmount}
+                  onChange={(e) => set("dosageAmount", e.target.value)}
                 />
-                {errors.dosageAmount && <div className="text-red-500">{errors.dosageAmount}</div>}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="frequency">Frequency</Label>
-                <div className="flex items-center space-x-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="numberOfUnits">Units per pack</Label>
+                <Input
+                  id="numberOfUnits"
+                  type="number"
+                  min="0"
+                  value={form.numberOfUnits}
+                  onChange={(e) => set("numberOfUnits", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Frequency</Label>
+                <div className="flex gap-2">
                   <Input
-                    id="frequencyValue"
                     type="number"
-                    value={medicationData.frequency.value}
-                    onChange={handleChange}
-                    placeholder="6"
                     min="0"
-                    required
+                    className="w-24"
+                    value={form.frequency.value}
+                    onChange={(e) => setNested("frequency", "value", e.target.value)}
                   />
-                  {errors.frequencyValue && <div className="text-red-500">{errors.frequencyValue}</div>}
                   <Select
-                    value={medicationData.frequency.unit}
-                    onValueChange={(value) => handleChange({ target: { id: 'frequencyUnit', value } })}
+                    value={form.frequency.unit}
+                    onValueChange={(v) => setNested("frequency", "unit", v)}
                   >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Hours" />
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="hours">Hours</SelectItem>
-                      <SelectItem value="days">Days</SelectItem>
+                      <SelectItem value="hours">Every N hours</SelectItem>
+                      <SelectItem value="days">Every N days</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="duration">Duration</Label>
-                <div className="flex items-center space-x-4">
+              <div className="space-y-1.5">
+                <Label>Duration</Label>
+                <div className="flex gap-2">
                   <Input
-                    id="durationValue"
                     type="number"
-                    value={medicationData.duration.value}
-                    onChange={handleChange}
-                    placeholder="7"
                     min="0"
-                    required
+                    className="w-24"
+                    value={form.duration.value}
+                    onChange={(e) => setNested("duration", "value", e.target.value)}
                   />
-                  {errors.durationValue && <div className="text-red-500">{errors.durationValue}</div>}
                   <Select
-                    value={medicationData.duration.unit}
-                    onValueChange={(value) => handleChange({ target: { id: 'durationUnit', value } })}
+                    value={form.duration.unit}
+                    onValueChange={(v) => setNested("duration", "unit", v)}
                   >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Days" />
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="days">Days</SelectItem>
@@ -250,93 +408,208 @@ export default function EditProductInventory() {
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="numberOfUnits">Number of Units</Label>
-                <Input
-                  id="numberOfUnits"
-                  type="number"
-                  value={medicationData.numberOfUnits}
-                  onChange={handleChange}
-                  placeholder="30"
-                  min="0"
-                  required
-                />
-                {errors.numberOfUnits && <div className="text-red-500">{errors.numberOfUnits}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="quantityInStock">Quantity in Stock</Label>
-                <Input
-                  id="quantityInStock"
-                  type="number"
-                  value={medicationData.quantityInStock}
-                  onChange={handleChange}
-                  placeholder="100"
-                  min="0"
-                  required
-                />
-                {errors.quantityInStock && <div className="text-red-500">{errors.quantityInStock}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="barcode">Barcode</Label>
-                <Input
-                  id="barcode"
-                  value={medicationData.barcode}
-                  onChange={handleChange}
-                  placeholder="1234567890123"
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  rows={3}
+                  placeholder="Storage instructions, warnings…"
+                  value={form.notes}
+                  onChange={(e) => set("notes", e.target.value)}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="price">Price</Label>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Pricing & reorder</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="price">Selling price (₦)</Label>
                 <Input
                   id="price"
                   type="number"
-                  value={medicationData.price}
-                  onChange={handleChange}
-                  placeholder="50"
                   min="0"
-                  step=".01"
-                  required
+                  value={form.price}
+                  onChange={(e) => set("price", e.target.value)}
                 />
-                {errors.price && <div className="text-red-500">{errors.price}</div>}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="expiryDate">Expiry Date</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="reorderLevel">Reorder level</Label>
+                <Input
+                  id="reorderLevel"
+                  type="number"
+                  min="0"
+                  value={form.reorderLevel}
+                  onChange={(e) => set("reorderLevel", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="expiryDate">Earliest expiry</Label>
                 <Input
                   id="expiryDate"
                   type="date"
-                  value={medicationData?.expiryDate ? new Date(medicationData?.expiryDate).toISOString().slice(0, 10) : "" }
-                  onChange={handleChange}
-                  required
-                />
-                {errors.expiryDate && <div className="text-red-500">{errors.expiryDate}</div>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Input
-                  id="notes"
-                  value={medicationData.notes}
-                  onChange={handleChange}
-                  placeholder="Any additional notes"
+                  value={form.expiryDate}
+                  onChange={(e) => set("expiryDate", e.target.value)}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="inStock">In Stock</Label>
-                <Input
-                  id="inStock"
-                  type="checkbox"
-                  checked={medicationData.inStock}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="grid gap-4">
-                <Button type="submit" disabled={saving}>
-                  {saving ? <Bars width="24" color="#fff" /> : 'Save Changes'}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: stock & batches */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Layers className="h-4 w-4 text-primary" /> Stock on hand
+              </CardTitle>
+              <CardDescription>
+                Stock changes are recorded in the ledger — receive or adjust, don't
+                overwrite
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-3xl font-bold tabular-nums">
+                {stockNow.toLocaleString()}{" "}
+                <span className="text-sm font-normal text-muted-foreground">units</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                >
+                  <Link href={`/dashboard/stock?receive=${id}`}>
+                    <PackagePlus className="h-3.5 w-3.5" /> Receive stock
+                  </Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setAdjustOpen(true)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> Adjust
                 </Button>
               </div>
-            </form>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Batches</CardTitle>
+              <CardDescription>Dispensing uses earliest expiry first</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {batches === null ? (
+                <>
+                  <Skeleton className="h-14" />
+                  <Skeleton className="h-14" />
+                </>
+              ) : batches.length === 0 ? (
+                <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                  No batches yet. Receive stock to start batch tracking for this
+                  drug.
+                </p>
+              ) : (
+                batches.map((b) => (
+                  <div
+                    key={b._id}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {b.batchNumber}
+                        {b.supplier?.name && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · {b.supplier.name}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Exp {shortDate(b.expiryDate)} · {naira(b.costPrice)}/unit
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-sm font-semibold tabular-nums">
+                        {b.quantityRemaining}/{b.quantityReceived}
+                      </span>
+                      <BatchStatusPill batch={b} />
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </main>
+
+      {/* Adjust stock sheet */}
+      <Sheet open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <SheetContent className="flex w-full flex-col gap-5 sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Adjust stock</SheetTitle>
+            <SheetDescription>
+              For counts, damage, or returns. Every adjustment is recorded in the
+              ledger with your reason.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-1.5">
+              <Label>Quantity change</Label>
+              <Input
+                type="number"
+                placeholder="e.g. -5 removes 5 units, 10 adds 10"
+                value={adjust.quantityChange}
+                onChange={(e) =>
+                  setAdjust((p) => ({ ...p, quantityChange: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select
+                value={adjust.type}
+                onValueChange={(v) => setAdjust((p) => ({ ...p, type: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="adjusted">Count correction</SelectItem>
+                  <SelectItem value="damaged">Damaged</SelectItem>
+                  <SelectItem value="returned">Returned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Reason (required)</Label>
+              <Textarea
+                rows={3}
+                placeholder="e.g. Physical count on 4 Jul found 5 fewer packs"
+                value={adjust.reason}
+                onChange={(e) =>
+                  setAdjust((p) => ({ ...p, reason: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <SheetFooter className="mt-auto">
+            <Button variant="outline" onClick={() => setAdjustOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitAdjustment} disabled={adjusting} className="gap-2">
+              {adjusting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Record adjustment
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }

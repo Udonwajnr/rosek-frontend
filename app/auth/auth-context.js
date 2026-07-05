@@ -24,12 +24,12 @@ const AuthContext = createContext();
                     // Set the Authorization header with the token
                     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                     // Validate token with a protected route
-                    const response = await api.get('https://medical-api-advo.onrender.com/api/protected-route');
+                    const response = await api.get('http://localhost:8000/api/protected-route');
                     if (response.status === 200) {
                         setIsAuthenticated(true);
                         // Fetch hospital data if token is valid
                         
-                        const hospitalResponse = await api.get(`https://medical-api-advo.onrender.com/api/hospital/${response?.data?.hospitalId}`);
+                        const hospitalResponse = await api.get(`http://localhost:8000/api/hospital/${response?.data?.hospitalId}`);
                         setHospitalData(hospitalResponse.data);
                         localStorage.setItem("_id",hospitalResponse?.data._id)
                     } else {
@@ -74,7 +74,7 @@ const AuthContext = createContext();
     const logout = async () => {
         try {
             // Optionally notify the server about logout here
-            await api.post('https://medical-api-advo.onrender.com/api/hospital/logout')
+            await api.post('http://localhost:8000/api/hospital/logout')
             .then((data)=>{
                 console.log(data)
                 localStorage.removeItem('accessToken');

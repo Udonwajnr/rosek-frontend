@@ -18,7 +18,7 @@ export default function UserDeleteConfirmation() {
   const checkIfUserExists = async (userId, hospitalId) => {
     try {
       const response = await api.get(
-        `https://medical-api-advo.onrender.com/api/user/hospital/${hospitalId}/users/${userId}`
+        `http://localhost:8000/api/user/hospital/${hospitalId}/users/${userId}`,
       );
       if (response.status === 200 && response.data) {
         setIsValidUser(true);
@@ -62,7 +62,7 @@ export default function UserDeleteConfirmation() {
 
     try {
       await api.delete(
-        `https://medical-api-advo.onrender.com/api/user/hospital/${hospitalId}/users/${userId}`
+        `http://localhost:8000/api/user/hospital/${hospitalId}/users/${userId}`,
       );
       alert("User deleted successfully.");
       router.push("/dashboard/user");
@@ -76,12 +76,16 @@ export default function UserDeleteConfirmation() {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-md text-center">
-        <TrashIcon className="mx-auto h-12 w-12 text-destructive" aria-label="Delete Icon" />
+        <TrashIcon
+          className="mx-auto h-12 w-12 text-destructive"
+          aria-label="Delete Icon"
+        />
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Delete User
         </h1>
         <p className="mt-4 text-muted-foreground">
-          Are you sure you want to delete this user? This action cannot be undone.
+          Are you sure you want to delete this user? This action cannot be
+          undone.
         </p>
         {error && <p className="mt-2 text-red-500">{error}</p>}
         <div className="mt-6 flex justify-center gap-4">

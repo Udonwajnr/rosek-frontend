@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -10,30 +10,31 @@ export default function DeleteMedication() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
   const [hospitalId, setHospitalId] = useState(null);
-  const [validMedication,setValidMedication] = useState(false)
+  const [validMedication, setValidMedication] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    const checkMedication = async()=>{
-        try{
-          const hospital = localStorage.getItem("_id");
-          const response = api.get(
-            `https://medical-api-advo.onrender.com/api/medication/${hospital}/medications/${id}`
-          ).then((data)=>{
-            setHospitalId(hospital)
-            setValidMedication(true)
+    const checkMedication = async () => {
+      try {
+        const hospital = localStorage.getItem("_id");
+        const response = api
+          .get(
+            `http://localhost:8000/api/medication/${hospital}/medications/${id}`,
+          )
+          .then((data) => {
+            setHospitalId(hospital);
+            setValidMedication(true);
           })
-          .catch((err)=>{
-            console.log(err)
-            setValidMedication(false)
+          .catch((err) => {
+            console.log(err);
+            setValidMedication(false);
             setError("Medication Not Found");
-          }) 
-        }
-        catch(err){
-          setError("Medication Not Found");
-        }
-    }
-    checkMedication()
+          });
+      } catch (err) {
+        setError("Medication Not Found");
+      }
+    };
+    checkMedication();
   }, [router]);
 
   const handleDelete = async () => {
@@ -47,12 +48,14 @@ export default function DeleteMedication() {
 
     setIsDeleting(true);
     try {
-      await api.delete(`https://medical-api-advo.onrender.com/api/medication/${hospitalId}/medications/${id}`);
+      await api.delete(
+        `http://localhost:8000/api/medication/${hospitalId}/medications/${id}`,
+      );
       alert("Deleted Successfully");
       router.push("/dashboard/inventory");
     } catch (err) {
       setError("Failed to delete the item.");
-      console.log(err)
+      console.log(err);
     } finally {
       setIsDeleting(false);
     }
@@ -62,13 +65,20 @@ export default function DeleteMedication() {
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-md text-center">
         <TrashIcon className="mx-auto h-12 w-12 text-destructive" />
-        <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Delete Item</h1>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          Delete Item
+        </h1>
         <p className="mt-4 text-muted-foreground">
-          Are you sure you want to delete this item? This action cannot be undone.
+          Are you sure you want to delete this item? This action cannot be
+          undone.
         </p>
         {error && <p className="mt-2 text-red-500">{error}</p>}
         <div className="mt-6 flex justify-center gap-4">
-          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting || !validMedication}>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isDeleting || !validMedication}
+          >
             {isDeleting ? "Deleting..." : "Confirm Delete"}
           </Button>
           <Link href="/dashboard/inventory">
