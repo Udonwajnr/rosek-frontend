@@ -32,23 +32,17 @@ import {
 } from "lucide-react";
 
 /* ---------------------------------------------------------------------------
- * AI Dispensing Workspace — Basket-level analysis
+ * AI Dispensing Workspace
  *
- * The AI checks the ENTIRE basket each time a drug is added/removed:
- *  - Drug-drug interactions between all basket items
- *  - Drug-patient contraindications (age, gender, existing meds on record)
- *  - Duplicate therapy
- *  - Dosage concerns
- *
- * Each alert is a short 2-line summary with an "Elaborate" button
- * that opens the sidebar and asks the AI for a detailed breakdown.
+ * One central warning box BELOW the basket for ALL alerts.
+ * Each alert is a single punchy line: drug → problem → reason → suggestion.
+ * "Elaborate" opens the sidebar for the deep dive.
  * ------------------------------------------------------------------------- */
 
 export default function DispensePage() {
   const hospitalId =
     typeof window !== "undefined" ? localStorage.getItem("_id") : null;
 
-  // ----- session state (sidebar reads this too) ----------------------------
   const [patients, setPatients] = useState([]);
   const [patient, setPatient] = useState(null);
   const [inventory, setInventory] = useState([]);
@@ -56,7 +50,7 @@ export default function DispensePage() {
 
   const [drugInput, setDrugInput] = useState("");
   const [basket, setBasket] = useState([]);
-  const [alerts, setAlerts] = useState([]); // [{severity, type, drugs, summary}]
+  const [alerts, setAlerts] = useState([]);
   const [checking, setChecking] = useState(false);
   const [dispensing, setDispensing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -71,7 +65,7 @@ export default function DispensePage() {
     [],
   );
 
-  // ----- initial data ------------------------------------------------------
+  // ----- load patients + inventory ----------------------------------------
   useEffect(() => {
     if (!hospitalId) return;
     (async () => {
@@ -90,14 +84,13 @@ export default function DispensePage() {
     })();
   }, [hospitalId]);
 
-  // ----- full basket analysis (fires on add / remove) ----------------------
+  // ----- full basket analysis ---------------------------------------------
   const analyseBasket = useCallback(
     async (nextBasket, currentPatient) => {
-      if (nextBasket.length === 0) {
+      if (nextBasket.length < 1) {
         setAlerts([]);
         return;
       }
-
       setChecking(true);
       try {
         const { data } = await api.post("/api/ai/check-basket", {
@@ -116,7 +109,7 @@ export default function DispensePage() {
     [hospitalId, sessionId],
   );
 
-  // ----- search suggestions ------------------------------------------------
+  // ----- inventory suggestions --------------------------------------------
   const suggestions = useMemo(() => {
     const q = drugInput.trim().toLowerCase();
     if (q.length < 2) return [];
@@ -129,7 +122,7 @@ export default function DispensePage() {
       .slice(0, 5);
   }, [drugInput, inventory, basket]);
 
-  // ----- basket actions ----------------------------------------------------
+  // ----- basket actions ---------------------------------------------------
   const addToBasket = (med) => {
     if ((med.quantityInStock || 0) < 1) {
       toast.error(`${med.nameOfDrugs} is out of stock.`);
@@ -147,7 +140,6 @@ export default function DispensePage() {
     const next = [...basket, item];
     setBasket(next);
     setDrugInput("");
-    // Trigger AI analysis on the updated basket
     analyseBasket(next, patient);
   };
 
@@ -173,7 +165,6 @@ export default function DispensePage() {
     );
   };
 
-  // Re-analyse when patient changes (their on-record meds affect contraindications)
   const handlePatientChange = (id) => {
     const p = patients.find((x) => x._id === id) || null;
     setPatient(p);
@@ -185,24 +176,13 @@ export default function DispensePage() {
     0,
   );
 
-  // ----- which basket rows are flagged? ------------------------------------
-  const alertsForDrug = (drugName) =>
-    alerts.filter((a) =>
-      a.drugs.some(
-        (d) =>
-          d.toLowerCase().includes(drugName.toLowerCase()) ||
-          drugName.toLowerCase().includes(d.toLowerCase()),
-      ),
-    );
-
-  // ----- elaborate: open sidebar with a specific question ------------------
+  // ----- elaborate: open sidebar with a specific alert --------------------
   const elaborate = (alert) => {
-    const drugList = alert.drugs.join(" and ");
-    const question = `Elaborate on this warning about ${drugList}: "${alert.summary}" — explain the mechanism, the specific risk, monitoring recommendations, and any safer alternatives for this patient.`;
+    const question = `Elaborate on this: "${alert.line}" — explain the mechanism, specific risk for this patient, monitoring recommendations, and safer alternatives.`;
     sidebarRef.current?.askQuestion(question);
   };
 
-  // ----- complete the dispense ---------------------------------------------
+  // ----- dispense ---------------------------------------------------------
   const dispense = async () => {
     if (!patient) return toast.error("Select a patient first.");
     if (basket.length === 0) return;
@@ -236,7 +216,7 @@ export default function DispensePage() {
       )
     : null;
 
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
   return (
     <div
       className={`flex flex-col gap-4 pb-24 transition-[margin] duration-300 ${
@@ -248,8 +228,8 @@ export default function DispensePage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dispense</h1>
           <p className="text-sm text-muted-foreground">
-            The AI checks your entire basket for interactions,
-            contraindications, and therapy problems each time you add a drug.
+            Add drugs to the basket — the AI analyses the full combination for
+            interactions, contraindications, and therapy problems.
           </p>
         </div>
         <Button
@@ -263,7 +243,7 @@ export default function DispensePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[340px,1fr]">
-        {/* ============== Left: patient + drug entry ============== */}
+        {/* ============== Left: patient + drug search ============== */}
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader className="pb-3">
@@ -303,8 +283,7 @@ export default function DispensePage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Add medication</CardTitle>
               <CardDescription>
-                Search your inventory — the basket is analysed after each
-                addition
+                Search inventory — basket is analysed after each addition
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -313,7 +292,6 @@ export default function DispensePage() {
                 onChange={(e) => setDrugInput(e.target.value)}
                 placeholder="Start typing a drug name…"
               />
-
               {suggestions.length > 0 && (
                 <ul className="mt-2 divide-y rounded-lg border">
                   {suggestions.map((med) => (
@@ -342,16 +320,16 @@ export default function DispensePage() {
               )}
               {drugInput.trim().length >= 2 && suggestions.length === 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  No inventory match for "{drugInput.trim()}".
+                  No inventory match for &ldquo;{drugInput.trim()}&rdquo;.
                 </p>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* ============== Right: basket + alerts ============== */}
+        {/* ============== Right: basket first, then warnings below ============== */}
         <div className="flex flex-col gap-4 self-start">
-          {/* Basket */}
+          {/* ── BASKET (clean, no per-row flags) ── */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -363,19 +341,11 @@ export default function DispensePage() {
                       : "Select a patient to dispense"}
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  {checking && (
-                    <span className="flex items-center gap-1.5 text-xs text-amber-600">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />{" "}
-                      Analysing…
-                    </span>
-                  )}
-                  {basket.length > 0 && (
-                    <Badge variant="secondary">
-                      {basket.length} item{basket.length > 1 ? "s" : ""}
-                    </Badge>
-                  )}
-                </div>
+                {basket.length > 0 && (
+                  <Badge variant="secondary">
+                    {basket.length} item{basket.length > 1 ? "s" : ""}
+                  </Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -387,83 +357,47 @@ export default function DispensePage() {
                   </p>
                 </div>
               ) : (
-                <ul className="space-y-2">
-                  {basket.map((item, i) => {
-                    const drugAlerts = alertsForDrug(item.name);
-                    const flagged = drugAlerts.length > 0;
-                    return (
-                      <li
-                        key={`${item.med}-${i}`}
-                        className={`rounded-lg border px-3 py-2.5 transition-colors ${
-                          flagged
-                            ? "border-l-4 border-red-300 border-l-red-500 bg-red-50/70 dark:bg-red-950/30"
-                            : "bg-background"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {item.name}{" "}
-                              <span className="font-normal text-muted-foreground">
-                                {item.dosage} · {item.dosageForm}
-                              </span>
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              ₦{item.price.toLocaleString()} each
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              max={item.stock}
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateQuantity(i, e.target.value)
-                              }
-                              className="h-8 w-16 text-center"
-                              aria-label={`Quantity of ${item.name}`}
-                            />
-                            <span className="w-20 text-right text-sm tabular-nums">
-                              ₦{(item.price * item.quantity).toLocaleString()}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeFromBasket(i)}
-                              aria-label={`Remove ${item.name}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Per-drug alerts: 2-line summary + Elaborate button */}
-                        {drugAlerts.map((alert, ai) => (
-                          <div
-                            key={ai}
-                            className="mt-2 flex items-start justify-between gap-2 rounded-md bg-red-100/80 px-3 py-2 dark:bg-red-950/50"
-                          >
-                            <div className="flex items-start gap-1.5">
-                              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600" />
-                              <p className="text-xs leading-relaxed text-red-800 dark:text-red-200">
-                                {alert.summary}
-                              </p>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 shrink-0 gap-1 px-2 text-[11px] text-red-700 hover:bg-red-200/60 hover:text-red-900 dark:text-red-300 dark:hover:bg-red-900/40"
-                              onClick={() => elaborate(alert)}
-                            >
-                              <MessageCircleWarning className="h-3 w-3" />
-                              Elaborate
-                            </Button>
-                          </div>
-                        ))}
-                      </li>
-                    );
-                  })}
+                <ul className="divide-y">
+                  {basket.map((item, i) => (
+                    <li
+                      key={`${item.med}-${i}`}
+                      className="flex items-center justify-between gap-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {item.name}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            {item.dosage} · {item.dosageForm}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          ₦{item.price.toLocaleString()} each
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={item.stock}
+                          value={item.quantity}
+                          onChange={(e) => updateQuantity(i, e.target.value)}
+                          className="h-8 w-16 text-center"
+                          aria-label={`Quantity of ${item.name}`}
+                        />
+                        <span className="w-20 text-right text-sm tabular-nums">
+                          ₦{(item.price * item.quantity).toLocaleString()}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeFromBasket(i)}
+                          aria-label={`Remove ${item.name}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               )}
 
@@ -488,21 +422,51 @@ export default function DispensePage() {
             </CardContent>
           </Card>
 
-          {/* Basket-level alert summary (for alerts spanning multiple drugs) */}
-          {alerts.length > 0 && !checking && (
-            <Card className="border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
+          {/* ── CENTRAL WARNING BOX (below the basket) ── */}
+          {(alerts.length > 0 || checking) && (
+            <Card className="border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/30">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4 text-amber-600" />
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    {alerts.length} alert{alerts.length > 1 ? "s" : ""} found in
-                    this basket
-                  </p>
+                <div className="mb-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                      {checking
+                        ? "Analysing basket…"
+                        : `${alerts.length} warning${alerts.length > 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                  {checking && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+                  )}
                 </div>
-                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                  Review each flagged item above. Click "Elaborate" for a
-                  detailed clinical breakdown from the assistant.
-                </p>
+
+                {!checking && alerts.length > 0 && (
+                  <ul className="space-y-2">
+                    {alerts.map((alert, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start justify-between gap-3 rounded-md bg-white/70 px-3 py-2 dark:bg-red-950/50"
+                      >
+                        <p className="text-xs leading-relaxed text-red-900 dark:text-red-100">
+                          <span className="font-semibold">
+                            {alert.drugs.join(" + ")}
+                          </span>
+                          {" — "}
+                          {alert.line.replace(/^[^—–]+[—–]\s*/, "")}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 shrink-0 gap-1 px-2 text-[11px] text-red-700 hover:bg-red-200/60 hover:text-red-900 dark:text-red-300 dark:hover:bg-red-900/40"
+                          onClick={() => elaborate(alert)}
+                        >
+                          <MessageCircleWarning className="h-3 w-3" />
+                          Elaborate
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
           )}
