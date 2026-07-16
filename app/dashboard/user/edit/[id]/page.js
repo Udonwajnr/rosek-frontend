@@ -23,27 +23,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import {
-  ArrowLeft,
-  Loader2,
-  Save,
-  Search,
-  Pill,
-  X,
-  Plus,
-} from "lucide-react";
-
-/*
- * Edit patient — two panels, same language as create-patient:
- *  left: patient details
- *  right: current medications (update qty/dates, mark for removal)
- *         + assign new medications from inventory
- *
- * Submits the exact payload updateUserInHospital expects:
- *  { fullName, dateOfBirth, gender, phoneNumber, email,
- *    medications: [{ _id, quantity, startDate, remove, ... }],
- *    newMedications: [{ medication, quantity, startDate, custom, ... }] }
- */
+import { ArrowLeft, Loader2, Save, Search, Pill, X, Plus } from "lucide-react";
 
 const shortDate = (d) =>
   d
@@ -71,12 +51,8 @@ export default function EditPatient() {
     phoneNumber: "",
     email: "",
   });
-
-  // Existing medications on the patient (from user.medications)
   const [existing, setExisting] = useState([]);
-  // New medications to assign this save
   const [added, setAdded] = useState([]);
-
   const [medQuery, setMedQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef(null);
@@ -102,13 +78,13 @@ export default function EditPatient() {
         setExisting(
           (u.medications || []).map((m) => ({
             _id: m._id,
-            med: m.medication, // populated
+            med: m.medication,
             quantity: m.quantity || 1,
             startDate: m.startDate ? m.startDate.slice(0, 10) : "",
             endDate: m.endDate ? m.endDate.slice(0, 10) : "",
             current: m.current,
             remove: false,
-          }))
+          })),
         );
         setInventory(invRes.data || []);
       })
@@ -119,12 +95,10 @@ export default function EditPatient() {
       .finally(() => setLoading(false));
   }, [userId]);
 
-  // Close picker on outside click
   useEffect(() => {
     const onClick = (e) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target))
         setPickerOpen(false);
-      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -141,7 +115,7 @@ export default function EditPatient() {
         (m) =>
           !q ||
           m.nameOfDrugs?.toLowerCase().includes(q) ||
-          m.barcode?.toLowerCase().includes(q)
+          m.barcode?.toLowerCase().includes(q),
       )
       .slice(0, 8);
   }, [inventory, medQuery, added]);
@@ -168,13 +142,14 @@ export default function EditPatient() {
   };
 
   const updateAdded = (i, patch) =>
-    setAdded((prev) => prev.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
+    setAdded((prev) =>
+      prev.map((a, idx) => (idx === i ? { ...a, ...patch } : a)),
+    );
   const removeAdded = (i) =>
     setAdded((prev) => prev.filter((_, idx) => idx !== i));
-
   const updateExisting = (i, patch) =>
     setExisting((prev) =>
-      prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m))
+      prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)),
     );
 
   const submit = async () => {
@@ -183,10 +158,12 @@ export default function EditPatient() {
 
     for (const a of added) {
       if (!a.quantity || a.quantity < 1)
-        return toast.error(`Quantity for ${a.med.nameOfDrugs} must be at least 1`);
+        return toast.error(
+          `Quantity for ${a.med.nameOfDrugs} must be at least 1`,
+        );
       if (a.quantity > (a.med.quantityInStock || 0))
         return toast.error(
-          `Only ${a.med.quantityInStock} units of ${a.med.nameOfDrugs} in stock`
+          `Only ${a.med.quantityInStock} units of ${a.med.nameOfDrugs} in stock`,
         );
     }
 
@@ -205,7 +182,6 @@ export default function EditPatient() {
           remove: m.remove,
         })),
       };
-
       if (added.length > 0) {
         payload.newMedications = added.map((a) => {
           const item = {
@@ -230,12 +206,16 @@ export default function EditPatient() {
           return item;
         });
       }
-
-      await api.put(`/api/user/hospital/${hospitalId}/users/${userId}`, payload);
+      await api.put(
+        `/api/user/hospital/${hospitalId}/users/${userId}`,
+        payload,
+      );
       toast.success("Patient updated");
       router.push(`/dashboard/user/${userId}`);
     } catch (error) {
-      toast.error(error.response?.data?.message || "Could not save changes. Try again.");
+      toast.error(
+        error.response?.data?.message || "Could not save changes. Try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -256,7 +236,7 @@ export default function EditPatient() {
   const removalCount = existing.filter((m) => m.remove).length;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 pb-24 sm:pb-0">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -270,13 +250,14 @@ export default function EditPatient() {
               Edit {form.fullName || "patient"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {existing.length} medication{existing.length === 1 ? "" : "s"} on file
+              {existing.length} medication{existing.length === 1 ? "" : "s"} on
+              file
               {added.length > 0 && ` · ${added.length} to assign`}
               {removalCount > 0 && ` · ${removalCount} marked for removal`}
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden gap-2 sm:flex">
           <Button asChild variant="outline">
             <Link href={`/dashboard/user/${userId}`}>Cancel</Link>
           </Button>
@@ -317,7 +298,10 @@ export default function EditPatient() {
             </div>
             <div className="space-y-1.5">
               <Label>Gender</Label>
-              <Select value={form.gender} onValueChange={(v) => set("gender", v)}>
+              <Select
+                value={form.gender}
+                onValueChange={(v) => set("gender", v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
@@ -366,9 +350,7 @@ export default function EditPatient() {
                 existing.map((m, i) => (
                   <div
                     key={m._id}
-                    className={`rounded-lg border p-3 transition-opacity ${
-                      m.remove ? "opacity-50" : ""
-                    }`}
+                    className={`rounded-lg border p-3 transition-opacity ${m.remove ? "opacity-50" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2">
@@ -376,7 +358,9 @@ export default function EditPatient() {
                           <Pill className="h-4 w-4 text-primary" />
                         </span>
                         <div className="min-w-0">
-                          <p className={`truncate text-sm font-medium ${m.remove ? "line-through" : ""}`}>
+                          <p
+                            className={`truncate text-sm font-medium ${m.remove ? "line-through" : ""}`}
+                          >
                             {m.med?.nameOfDrugs || "(deleted drug)"}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -474,7 +458,9 @@ export default function EditPatient() {
                           <span
                             className={`shrink-0 text-xs ${out ? "text-red-500" : "text-muted-foreground"}`}
                           >
-                            {out ? "Out of stock" : `${m.quantityInStock} in stock`}
+                            {out
+                              ? "Out of stock"
+                              : `${m.quantityInStock} in stock`}
                           </span>
                         </button>
                       );
@@ -508,17 +494,20 @@ export default function EditPatient() {
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Quantity</Label>
+                      <Label className="text-xs text-muted-foreground">
+                        Quantity
+                      </Label>
                       <Input
                         type="number"
                         min="1"
                         max={a.med.quantityInStock}
                         className="h-8"
                         value={a.quantity}
-                        onChange={(e) => updateAdded(i, { quantity: e.target.value })}
+                        onChange={(e) =>
+                          updateAdded(i, { quantity: e.target.value })
+                        }
                       />
                     </div>
                     <div className="space-y-1">
@@ -529,11 +518,12 @@ export default function EditPatient() {
                         type="date"
                         className="h-8"
                         value={a.startDate}
-                        onChange={(e) => updateAdded(i, { startDate: e.target.value })}
+                        onChange={(e) =>
+                          updateAdded(i, { startDate: e.target.value })
+                        }
                       />
                     </div>
                   </div>
-
                   <div className="mt-3 flex items-center justify-between">
                     <Label className="text-xs">Custom regimen</Label>
                     <Switch
@@ -541,7 +531,6 @@ export default function EditPatient() {
                       onCheckedChange={(v) => updateAdded(i, { custom: v })}
                     />
                   </div>
-
                   {a.custom && (
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <div className="space-y-1">
@@ -581,7 +570,10 @@ export default function EditPatient() {
                             value={a.customFrequency.unit}
                             onValueChange={(v) =>
                               updateAdded(i, {
-                                customFrequency: { ...a.customFrequency, unit: v },
+                                customFrequency: {
+                                  ...a.customFrequency,
+                                  unit: v,
+                                },
                               })
                             }
                           >
@@ -618,7 +610,10 @@ export default function EditPatient() {
                             value={a.customDuration.unit}
                             onValueChange={(v) =>
                               updateAdded(i, {
-                                customDuration: { ...a.customDuration, unit: v },
+                                customDuration: {
+                                  ...a.customDuration,
+                                  unit: v,
+                                },
                               })
                             }
                           >
@@ -638,6 +633,23 @@ export default function EditPatient() {
               ))}
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Mobile action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background p-3 sm:hidden">
+        <div className="flex gap-2">
+          <Button asChild variant="outline" className="flex-1">
+            <Link href={`/dashboard/user/${userId}`}>Cancel</Link>
+          </Button>
+          <Button onClick={submit} disabled={saving} className="flex-1 gap-2">
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save changes
+          </Button>
         </div>
       </div>
     </div>

@@ -24,13 +24,6 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Pill, PackagePlus, ScanBarcode } from "lucide-react";
 
-/*
- * Add medication — two-panel workspace:
- *  left: drug identity + default regimen
- *  right: stock, pricing, expiry, supplier
- * Submits the exact payload createMedicationForHospital expects.
- */
-
 const DOSAGE_FORMS = [
   "Tablet",
   "Capsule",
@@ -151,7 +144,7 @@ export default function CreateMedication() {
   };
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 pb-24 sm:pb-0">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -169,7 +162,7 @@ export default function CreateMedication() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden gap-2 sm:flex">
           <Button asChild variant="outline">
             <Link href="/dashboard/inventory">Cancel</Link>
           </Button>
@@ -423,6 +416,19 @@ export default function CreateMedication() {
               )}
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Mobile action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background p-3 sm:hidden">
+        <div className="flex gap-2">
+          <Button asChild variant="outline" className="flex-1">
+            <Link href="/dashboard/inventory">Cancel</Link>
+          </Button>
+          <Button onClick={submit} disabled={saving} className="flex-1 gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
+            Add medication
+          </Button>
         </div>
       </div>
     </div>

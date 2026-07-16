@@ -6,17 +6,23 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Plus, X, Pill, Loader2, UserPlus } from "lucide-react";
-
-/*
- * Create patient — two panels:
- *  left: patient details, right: assign medications from inventory.
- * Submits the exact payload the backend createUserInHospital expects.
- */
 
 export default function CreatePatient() {
   const router = useRouter();
@@ -30,7 +36,7 @@ export default function CreatePatient() {
     phoneNumber: "",
     email: "",
   });
-  const [assigned, setAssigned] = useState([]); // {med, startDate, quantity, custom, customDosage, customFrequency, customDuration}
+  const [assigned, setAssigned] = useState([]);
   const [medQuery, setMedQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -48,7 +54,8 @@ export default function CreatePatient() {
       });
 
     const onClickOutside = (e) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target))
+        setPickerOpen(false);
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
@@ -63,7 +70,7 @@ export default function CreatePatient() {
       .filter(
         (m) =>
           !assigned.some((a) => a.med._id === m._id) &&
-          (q === "" || m.nameOfDrugs?.toLowerCase().includes(q))
+          (q === "" || m.nameOfDrugs?.toLowerCase().includes(q)),
       )
       .slice(0, 6);
   }, [inventory, medQuery, assigned]);
@@ -90,17 +97,24 @@ export default function CreatePatient() {
   };
 
   const updateAssigned = (index, patch) =>
-    setAssigned((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+    setAssigned((prev) =>
+      prev.map((a, i) => (i === index ? { ...a, ...patch } : a)),
+    );
 
   const removeAssigned = (index) =>
     setAssigned((prev) => prev.filter((_, i) => i !== index));
 
   const canSubmit =
-    form.fullName.trim() && form.dateOfBirth && form.gender && form.phoneNumber.trim();
+    form.fullName.trim() &&
+    form.dateOfBirth &&
+    form.gender &&
+    form.phoneNumber.trim();
 
   const handleSubmit = async () => {
     if (!canSubmit) {
-      toast.error("Full name, date of birth, gender, and phone number are required.");
+      toast.error(
+        "Full name, date of birth, gender, and phone number are required.",
+      );
       return;
     }
     setSaving(true);
@@ -113,10 +127,16 @@ export default function CreatePatient() {
         custom: a.custom,
         customDosage: a.custom ? a.customDosage : undefined,
         customFrequency: a.custom
-          ? { value: Number(a.customFrequency.value), unit: a.customFrequency.unit }
+          ? {
+              value: Number(a.customFrequency.value),
+              unit: a.customFrequency.unit,
+            }
           : undefined,
         customDuration: a.custom
-          ? { value: Number(a.customDuration.value), unit: a.customDuration.unit }
+          ? {
+              value: Number(a.customDuration.value),
+              unit: a.customDuration.unit,
+            }
           : undefined,
       }));
 
@@ -124,37 +144,52 @@ export default function CreatePatient() {
         ...form,
         medications: medicationsPayload,
       });
-      toast.success(`${form.fullName} added${assigned.length ? ` with ${assigned.length} medication(s)` : ""}.`);
+      toast.success(
+        `${form.fullName} added${assigned.length ? ` with ${assigned.length} medication(s)` : ""}.`,
+      );
       router.push("/dashboard/user");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Could not create the patient.");
+      toast.error(
+        err.response?.data?.message || "Could not create the patient.",
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 pb-24 sm:pb-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">New patient</h1>
           <p className="text-sm text-muted-foreground">
-            Add their details and, optionally, assign medications in the same step.
+            Add their details and, optionally, assign medications in the same
+            step.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/dashboard/user")}>
+        <div className="hidden gap-2 sm:flex">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/user")}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={saving || !canSubmit} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+          <Button
+            onClick={handleSubmit}
+            disabled={saving || !canSubmit}
+            className="gap-2"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="h-4 w-4" />
+            )}
             {saving ? "Saving…" : "Create patient"}
           </Button>
         </div>
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-[1fr,1.2fr]">
-        {/* ---------- Patient details ---------- */}
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="text-base">Patient details</CardTitle>
@@ -181,7 +216,10 @@ export default function CreatePatient() {
               </div>
               <div className="grid gap-1.5">
                 <Label>Gender *</Label>
-                <Select value={form.gender} onValueChange={(v) => setField("gender", v)}>
+                <Select
+                  value={form.gender}
+                  onValueChange={(v) => setField("gender", v)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
@@ -215,13 +253,14 @@ export default function CreatePatient() {
           </CardContent>
         </Card>
 
-        {/* ---------- Medication assignment ---------- */}
         <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-base">Medications</CardTitle>
-                <CardDescription>Assigned now — stock is reserved on creation</CardDescription>
+                <CardDescription>
+                  Assigned now — stock is reserved on creation
+                </CardDescription>
               </div>
               {assigned.length > 0 && (
                 <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
@@ -231,7 +270,6 @@ export default function CreatePatient() {
             </div>
           </CardHeader>
           <CardContent className="grid gap-3">
-            {/* Picker */}
             <div className="relative" ref={pickerRef}>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -272,7 +310,8 @@ export default function CreatePatient() {
                               </span>
                             </span>
                             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              {m.quantityInStock} in stock <Plus className="h-3.5 w-3.5" />
+                              {m.quantityInStock} in stock{" "}
+                              <Plus className="h-3.5 w-3.5" />
                             </span>
                           </button>
                         </li>
@@ -283,7 +322,6 @@ export default function CreatePatient() {
               )}
             </div>
 
-            {/* Assigned list */}
             {assigned.length === 0 ? (
               <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed py-8 text-center">
                 <Pill className="h-5 w-5 text-muted-foreground/50" />
@@ -304,8 +342,9 @@ export default function CreatePatient() {
                           </span>
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Default: every {a.med.frequency?.value} {a.med.frequency?.unit} for{" "}
-                          {a.med.duration?.value} {a.med.duration?.unit}
+                          Default: every {a.med.frequency?.value}{" "}
+                          {a.med.frequency?.unit} for {a.med.duration?.value}{" "}
+                          {a.med.duration?.unit}
                         </p>
                       </div>
                       <Button
@@ -317,7 +356,6 @@ export default function CreatePatient() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
-
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
                       <div className="grid gap-1">
                         <Label className="text-xs">Quantity</Label>
@@ -326,7 +364,9 @@ export default function CreatePatient() {
                           min={1}
                           max={a.med.quantityInStock}
                           value={a.quantity}
-                          onChange={(e) => updateAssigned(i, { quantity: e.target.value })}
+                          onChange={(e) =>
+                            updateAssigned(i, { quantity: e.target.value })
+                          }
                           className="h-9"
                         />
                       </div>
@@ -335,13 +375,13 @@ export default function CreatePatient() {
                         <Input
                           type="date"
                           value={a.startDate}
-                          onChange={(e) => updateAssigned(i, { startDate: e.target.value })}
+                          onChange={(e) =>
+                            updateAssigned(i, { startDate: e.target.value })
+                          }
                           className="h-9"
                         />
                       </div>
                     </div>
-
-                    {/* Custom regimen */}
                     <div className="mt-3 flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
                       <div>
                         <p className="text-xs font-medium">Custom regimen</p>
@@ -351,18 +391,23 @@ export default function CreatePatient() {
                       </div>
                       <Switch
                         checked={a.custom}
-                        onCheckedChange={(v) => updateAssigned(i, { custom: v })}
+                        onCheckedChange={(v) =>
+                          updateAssigned(i, { custom: v })
+                        }
                         aria-label="Toggle custom regimen"
                       />
                     </div>
-
                     {a.custom && (
                       <div className="mt-3 grid gap-3 sm:grid-cols-3">
                         <div className="grid gap-1">
                           <Label className="text-xs">Dosage</Label>
                           <Input
                             value={a.customDosage}
-                            onChange={(e) => updateAssigned(i, { customDosage: e.target.value })}
+                            onChange={(e) =>
+                              updateAssigned(i, {
+                                customDosage: e.target.value,
+                              })
+                            }
                             placeholder="e.g. 2.5mg"
                             className="h-9"
                           />
@@ -376,7 +421,10 @@ export default function CreatePatient() {
                               value={a.customFrequency.value}
                               onChange={(e) =>
                                 updateAssigned(i, {
-                                  customFrequency: { ...a.customFrequency, value: e.target.value },
+                                  customFrequency: {
+                                    ...a.customFrequency,
+                                    value: e.target.value,
+                                  },
                                 })
                               }
                               className="h-9"
@@ -385,7 +433,10 @@ export default function CreatePatient() {
                               value={a.customFrequency.unit}
                               onValueChange={(v) =>
                                 updateAssigned(i, {
-                                  customFrequency: { ...a.customFrequency, unit: v },
+                                  customFrequency: {
+                                    ...a.customFrequency,
+                                    unit: v,
+                                  },
                                 })
                               }
                             >
@@ -408,7 +459,10 @@ export default function CreatePatient() {
                               value={a.customDuration.value}
                               onChange={(e) =>
                                 updateAssigned(i, {
-                                  customDuration: { ...a.customDuration, value: e.target.value },
+                                  customDuration: {
+                                    ...a.customDuration,
+                                    value: e.target.value,
+                                  },
                                 })
                               }
                               className="h-9"
@@ -417,7 +471,10 @@ export default function CreatePatient() {
                               value={a.customDuration.unit}
                               onValueChange={(v) =>
                                 updateAssigned(i, {
-                                  customDuration: { ...a.customDuration, unit: v },
+                                  customDuration: {
+                                    ...a.customDuration,
+                                    unit: v,
+                                  },
                                 })
                               }
                             >
@@ -439,6 +496,31 @@ export default function CreatePatient() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* Mobile action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background p-3 sm:hidden">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => router.push("/dashboard/user")}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={saving || !canSubmit}
+            className="flex-1 gap-2"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="h-4 w-4" />
+            )}
+            {saving ? "Saving…" : "Create patient"}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -97,7 +97,6 @@ export default function EditMedication() {
 
   const [form, setForm] = useState(null);
 
-  // Adjust-stock sheet
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjust, setAdjust] = useState({ quantityChange: "", type: "adjusted", reason: "" });
   const [adjusting, setAdjusting] = useState(false);
@@ -224,7 +223,7 @@ export default function EditMedication() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 pb-24 sm:pb-0">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -242,7 +241,7 @@ export default function EditMedication() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden gap-2 sm:flex">
           <Button asChild variant="outline">
             <Link href="/dashboard/inventory">Cancel</Link>
           </Button>
@@ -610,6 +609,19 @@ export default function EditMedication() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* Mobile action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background p-3 sm:hidden">
+        <div className="flex gap-2">
+          <Button asChild variant="outline" className="flex-1">
+            <Link href="/dashboard/inventory">Cancel</Link>
+          </Button>
+          <Button onClick={submit} disabled={saving} className="flex-1 gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save changes
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
