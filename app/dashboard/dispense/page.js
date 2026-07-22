@@ -37,6 +37,9 @@ import {
  * One central warning box BELOW the basket for ALL alerts.
  * Each alert is a single punchy line: drug → problem → reason → suggestion.
  * "Elaborate" opens the sidebar for the deep dive.
+ *
+ * "Ask the assistant" sits in the header on desktop, but drops to a
+ * sticky bottom bar on mobile so it's reachable with a thumb.
  * ------------------------------------------------------------------------- */
 
 export default function DispensePage() {
@@ -232,10 +235,11 @@ export default function DispensePage() {
             interactions, contraindications, and therapy problems.
           </p>
         </div>
+        {/* Desktop: button lives in the header */}
         <Button
           variant={sidebarOpen ? "secondary" : "default"}
           onClick={() => setSidebarOpen((v) => !v)}
-          className="gap-2"
+          className="hidden gap-2 sm:inline-flex"
         >
           <Sparkles className="h-4 w-4" />
           {sidebarOpen ? "Hide assistant" : "Ask the assistant"}
@@ -471,6 +475,18 @@ export default function DispensePage() {
             </Card>
           )}
         </div>
+      </div>
+
+      {/* ============== Mobile: sticky "Ask the assistant" bar ============== */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background p-3 sm:hidden">
+        <Button
+          variant={sidebarOpen ? "secondary" : "default"}
+          onClick={() => setSidebarOpen((v) => !v)}
+          className="w-full gap-2"
+        >
+          <Sparkles className="h-4 w-4" />
+          {sidebarOpen ? "Hide assistant" : "Ask the assistant"}
+        </Button>
       </div>
 
       {/* ============== Sidebar ============== */}
