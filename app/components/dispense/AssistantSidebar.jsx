@@ -7,12 +7,34 @@ import {
   forwardRef,
 } from "react";
 import api from "../../axios/axiosConfig";
+import { toAIBasketItem } from "./regimen";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
-import { Sparkles, SendHorizonal, X, Loader2 } from "lucide-react";
+import {
+  Sparkles,
+  SendHorizonal,
+  X,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 
-/* ── Markdown prose styling ─────────────────────────────────────────────── */
+/* ── Size modes ─────────────────────────────────────────────────────────
+ * side: narrow panel (24rem)          default, pushes the page on lg+
+ * wide: wider panel (42rem)           for tables, pushes the page on 2xl+
+ * full: covers the whole screen       content centred for readability
+ * On phones "side" and "wide" look the same, so only full is offered.
+ * ------------------------------------------------------------------- */
+const SIZE_CLASSES = {
+  side: "inset-y-0 right-0 w-full max-w-sm border-l shadow-xl",
+  wide: "inset-y-0 right-0 w-full max-w-sm sm:max-w-2xl border-l shadow-xl",
+  full: "inset-0 w-full max-w-none",
+};
+
+/* ── Markdown prose styling ─────────────────────────────────────────── */
 const mdComponents = {
   h1: ({ children }) => (
     <h3 className="mb-1 mt-3 text-sm font-bold">{children}</h3>
@@ -46,11 +68,15 @@ const mdComponents = {
   ),
   thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
   th: ({ children }) => (
-    <th className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <th className="whitespace-nowrap px-2.5 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </th>
   ),
-  td: ({ children }) => <td className="border-t px-2 py-1.5">{children}</td>,
+  td: ({ children }) => (
+    <td className="border-t px-2.5 py-1.5 align-top leading-relaxed">
+      {children}
+    </td>
+  ),
   code: ({ children, className }) => {
     const isBlock = className?.includes("language-");
     if (isBlock) {
@@ -73,8 +99,8 @@ const mdComponents = {
   ),
 };
 
-/* ── Message bubble ─────────────────────────────────────────────────────── */
-function MessageBubble({ message }) {
+/* ── Message bubble ─────────────────────────────────────────────────── */
+function MessageBubble({ message, roomy }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
@@ -85,11 +111,11 @@ function MessageBubble({ message }) {
     );
   }
 
-  // Assistant message — render markdown
+  // Assistant message: in wide/full mode give it the full row so tables have room
   return (
     <div className="flex justify-start">
       <div
-        className={`max-w-[90%] rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm ${
+        className={`${roomy ? "w-full" : "max-w-[90%]"} min-w-0 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm ${
           message.error
             ? "border border-amber-300 bg-amber-50 text-amber-900"
             : "bg-muted text-foreground"
@@ -103,9 +129,17 @@ function MessageBubble({ message }) {
   );
 }
 
-/* ── Sidebar ────────────────────────────────────────────────────────────── */
+/* ── Sidebar ────────────────────────────────────────────────────────── */
 const AssistantSidebar = forwardRef(function AssistantSidebar(
-  { open, onOpen, onClose, patient, basket },
+  {
+    open,
+    onOpen,
+    onClose,
+    patient,
+    basket,
+    size = "side",
+    onSizeChange = () => {},
+  },
   ref,
 ) {
   const [messages, setMessages] = useState([]);
@@ -113,10 +147,38 @@ const AssistantSidebar = forwardRef(function AssistantSidebar(
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
 
+  const isFull = size === "full";
+  const isWide = size === "wide";
+  const roomy = isFull || isWide;
+  // Centre the conversation in full screen so lines don't stretch edge to edge
+  const inner = isFull ? "mx-auto w-full max-w-3xl" : "";
+
   useEffect(() => {
     if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, loading]);
+
+  // Escape: leave full screen first, then close
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (isFull) onSizeChange("side");
+      else onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, isFull, onClose, onSizeChange]);
+
+  // Stop the page behind from scrolling while full screen
+  useEffect(() => {
+    if (!(open && isFull)) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open, isFull]);
 
   const sendQuestion = async (question, existingMessages) => {
     const msgs = existingMessages || messages;
@@ -129,7 +191,7 @@ const AssistantSidebar = forwardRef(function AssistantSidebar(
       const { data } = await api.post("/api/ai/chat", {
         question,
         patientId: patient?._id || null,
-        basket: basket.map((b) => ({ name: b.name, dosage: b.dosage })),
+        basket: basket.map(toAIBasketItem),
         history: msgs,
       });
       setMessages([...next, { role: "assistant", content: data.answer }]);
@@ -164,117 +226,166 @@ const AssistantSidebar = forwardRef(function AssistantSidebar(
 
   return (
     <aside
-      className={`fixed inset-y-0 right-0 z-30 flex w-full max-w-sm flex-col border-l bg-background shadow-xl transition-transform duration-300 ease-in-out ${
+      className={`fixed flex flex-col bg-background transition-[transform,max-width] duration-300 ease-in-out ${
+        isFull ? "z-50" : "z-30"
+      } ${SIZE_CLASSES[size] || SIZE_CLASSES.side} ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
       aria-hidden={!open}
+      aria-label="Clinical assistant"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Sparkles className="h-3.5 w-3.5" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold leading-none">
-              Clinical assistant
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Sees your current basket and patient
-            </p>
+      <div className="border-b">
+        <div
+          className={`flex items-center justify-between gap-2 px-4 py-3 ${inner}`}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <Sparkles className="h-3.5 w-3.5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-none">
+                Clinical assistant
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                Sees your current basket and patient
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-0.5">
+            {/* Wider / narrower: desktop only, hidden in full screen */}
+            {!isFull && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden sm:inline-flex"
+                onClick={() => onSizeChange(isWide ? "side" : "wide")}
+                aria-label={isWide ? "Make panel narrower" : "Make panel wider"}
+                title={isWide ? "Narrower" : "Wider"}
+              >
+                {isWide ? (
+                  <ChevronsRight className="h-4 w-4" />
+                ) : (
+                  <ChevronsLeft className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+
+            {/* Full screen toggle: all screen sizes */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onSizeChange(isFull ? "side" : "full")}
+              aria-label={isFull ? "Exit full screen" : "Full screen"}
+              title={isFull ? "Exit full screen (Esc)" : "Full screen"}
+            >
+              {isFull ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close assistant"
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          aria-label="Close assistant"
-        >
-          <X className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Live context strip */}
-      <div className="border-b bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-        <span className="font-medium text-foreground">
-          {patient ? patient.fullName : "No patient selected"}
-        </span>
-        {" · "}
-        {basket.length === 0
-          ? "basket empty"
-          : `${basket.length} drug${basket.length > 1 ? "s" : ""}: ${basket
-              .map((b) => b.name)
-              .join(", ")}`}
+      <div className="border-b bg-muted/50">
+        <div
+          className={`truncate px-4 py-2 text-[11px] text-muted-foreground ${inner}`}
+        >
+          <span className="font-medium text-foreground">
+            {patient ? patient.fullName : "No patient selected"}
+          </span>
+          {" · "}
+          {basket.length === 0
+            ? "basket empty"
+            : `${basket.length} drug${basket.length > 1 ? "s" : ""}: ${basket
+                .map((b) => b.name)
+                .join(", ")}`}
+        </div>
       </div>
 
       {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto rosek-scroll px-4 py-4"
-      >
-        {messages.length === 0 && !loading && (
-          <div className="mt-8 space-y-3 text-center">
-            <p className="text-sm text-muted-foreground">
-              Ask anything about the current prescription.
-            </p>
-            <div className="mx-auto max-w-[260px] space-y-2">
-              {[
-                "Is this combination safe for this patient?",
-                "What should I counsel the patient on?",
-                "Any dose adjustment for renal impairment?",
-              ].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => sendQuestion(s)}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {messages.map((m, i) => (
-            <MessageBubble key={i} message={m} />
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2 text-sm text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Thinking…
+      <div ref={scrollRef} className="flex-1 overflow-y-auto rosek-scroll">
+        <div className={`px-4 py-4 ${inner}`}>
+          {messages.length === 0 && !loading && (
+            <div className="mt-8 space-y-3 text-center">
+              <p className="text-sm text-muted-foreground">
+                Ask anything about the current prescription.
+              </p>
+              <div className="mx-auto max-w-[260px] space-y-2">
+                {[
+                  "Is this combination safe for this patient?",
+                  "What should I counsel the patient on?",
+                  "Any dose adjustment for renal impairment?",
+                ].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => sendQuestion(s)}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             </div>
           )}
+
+          <div className="space-y-3">
+            {messages.map((m, i) => (
+              <MessageBubble key={i} message={m} roomy={roomy} />
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Thinking…
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Input */}
-      <div className="border-t p-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            placeholder="Ask a clinical question…"
-            className="max-h-28 min-h-[40px] flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <Button
-            size="icon"
-            onClick={() =>
-              input.trim() && !loading && sendQuestion(input.trim())
-            }
-            disabled={loading || !input.trim()}
-            aria-label="Send"
-          >
-            <SendHorizonal className="h-4 w-4" />
-          </Button>
+      <div className="border-t">
+        <div className={`p-3 ${inner}`}>
+          <div className="flex items-end gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder="Ask a clinical question…"
+              className="max-h-28 min-h-[40px] flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              size="icon"
+              onClick={() =>
+                input.trim() && !loading && sendQuestion(input.trim())
+              }
+              disabled={loading || !input.trim()}
+              aria-label="Send"
+            >
+              <SendHorizonal className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+            AI support. Final decisions rest with the pharmacist.
+          </p>
         </div>
-        <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
-          AI support — final decisions rest with the pharmacist.
-        </p>
       </div>
     </aside>
   );

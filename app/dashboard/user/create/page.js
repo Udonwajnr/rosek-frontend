@@ -3,6 +3,10 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/app/axios/axiosConfig";
 import { toast } from "sonner";
+import MedicalHistoryCard, {
+  EMPTY_MEDICAL_HISTORY,
+  toMedicalHistoryPayload,
+} from "@/app/components/MedicalHistoryCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +40,7 @@ export default function CreatePatient() {
     phoneNumber: "",
     email: "",
   });
+  const [medicalHistory, setMedicalHistory] = useState(EMPTY_MEDICAL_HISTORY);
   const [assigned, setAssigned] = useState([]);
   const [medQuery, setMedQuery] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -142,6 +147,7 @@ export default function CreatePatient() {
 
       await api.post(`/api/user/hospital/${hospitalId}/users`, {
         ...form,
+        medicalHistory: toMedicalHistoryPayload(medicalHistory, form.gender),
         medications: medicationsPayload,
       });
       toast.success(
@@ -163,8 +169,8 @@ export default function CreatePatient() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">New patient</h1>
           <p className="text-sm text-muted-foreground">
-            Add their details and, optionally, assign medications in the same
-            step.
+            Add their details and medical history, and optionally assign
+            medications in the same step.
           </p>
         </div>
         <div className="hidden gap-2 sm:flex">
@@ -190,76 +196,86 @@ export default function CreatePatient() {
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-[1fr,1.2fr]">
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">Patient details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-1.5">
-              <Label htmlFor="fullName">Full name *</Label>
-              <Input
-                id="fullName"
-                value={form.fullName}
-                onChange={(e) => setField("fullName", e.target.value)}
-                placeholder="e.g. Chief Emeka Nwosu"
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+        {/* Left column: details + medical history */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Patient details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
               <div className="grid gap-1.5">
-                <Label htmlFor="dateOfBirth">Date of birth *</Label>
+                <Label htmlFor="fullName">Full name *</Label>
                 <Input
-                  id="dateOfBirth"
-                  type="date"
-                  value={form.dateOfBirth}
-                  onChange={(e) => setField("dateOfBirth", e.target.value)}
+                  id="fullName"
+                  value={form.fullName}
+                  onChange={(e) => setField("fullName", e.target.value)}
+                  placeholder="e.g. Chief Emeka Nwosu"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="dateOfBirth">Date of birth *</Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={form.dateOfBirth}
+                    onChange={(e) => setField("dateOfBirth", e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Gender *</Label>
+                  <Select
+                    value={form.gender}
+                    onValueChange={(v) => setField("gender", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="phoneNumber">Phone number *</Label>
+                <Input
+                  id="phoneNumber"
+                  value={form.phoneNumber}
+                  onChange={(e) => setField("phoneNumber", e.target.value)}
+                  placeholder="+234…"
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label>Gender *</Label>
-                <Select
-                  value={form.gender}
-                  onValueChange={(v) => setField("gender", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setField("email", e.target.value)}
+                  placeholder="Used for medication schedule emails"
+                />
               </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="phoneNumber">Phone number *</Label>
-              <Input
-                id="phoneNumber"
-                value={form.phoneNumber}
-                onChange={(e) => setField("phoneNumber", e.target.value)}
-                placeholder="+234…"
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={form.email}
-                onChange={(e) => setField("email", e.target.value)}
-                placeholder="Used for medication schedule emails"
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
+          <MedicalHistoryCard
+            value={medicalHistory}
+            onChange={setMedicalHistory}
+            gender={form.gender}
+          />
+        </div>
+
+        {/* Right column: medications */}
         <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-base">Medications</CardTitle>
                 <CardDescription>
-                  Assigned now — stock is reserved on creation
+                  Assigned now, stock is reserved on creation
                 </CardDescription>
               </div>
               {assigned.length > 0 && (
@@ -326,7 +342,7 @@ export default function CreatePatient() {
               <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed py-8 text-center">
                 <Pill className="h-5 w-5 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">
-                  No medications assigned yet — you can also do this later.
+                  No medications assigned yet. You can also do this later.
                 </p>
               </div>
             ) : (

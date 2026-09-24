@@ -4,6 +4,16 @@ import api from "../../axios/axiosConfig";
 import { toast } from "sonner";
 import AssistantSidebar from "../../components/dispense/AssistantSidebar";
 import {
+  DOSE_UNITS,
+  FREQUENCIES,
+  DURATION_UNITS,
+  defaultRegimen,
+  dailyTotal,
+  isRegimenComplete,
+  toAIBasketItem,
+  toRegimenPayload,
+} from "../../components/dispense/regimen";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -12,6 +22,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -34,13 +45,22 @@ import {
 /* ---------------------------------------------------------------------------
  * AI Dispensing Workspace
  *
- * One central warning box BELOW the basket for ALL alerts.
- * Each alert is a single punchy line: drug → problem → reason → suggestion.
- * "Elaborate" opens the sidebar for the deep dive.
- *
- * "Ask the assistant" sits in the header on desktop, but drops to a
- * sticky bottom bar on mobile so it's reachable with a thumb.
+ * Each basket item carries its regimen: dose, frequency, duration.
+ * The basket is re-analysed shortly after any drug, regimen or patient change,
+ * so the AI can catch overdoses and unsafe durations, not just interactions.
  * ------------------------------------------------------------------------- */
+
+const ASSISTANT_SIZE_KEY = "assistantSize";
+const ANALYSE_DELAY_MS = 700;
+
+const PUSH_CLASS = {
+  side: "lg:mr-[24rem]",
+  wide: "2xl:mr-[42rem]",
+  full: "",
+};
+
+const invalid = (show, bad) =>
+  show && bad ? "border-red-500 focus-visible:ring-red-500" : "";
 
 export default function DispensePage() {
   const hospitalId =
@@ -56,9 +76,12 @@ export default function DispensePage() {
   const [alerts, setAlerts] = useState([]);
   const [checking, setChecking] = useState(false);
   const [dispensing, setDispensing] = useState(false);
+  const [showRegimenErrors, setShowRegimenErrors] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [assistantSize, setAssistantSize] = useState("side");
 
   const sidebarRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const sessionId = useMemo(
     () =>
@@ -67,6 +90,24 @@ export default function DispensePage() {
         : `${Date.now()}`,
     [],
   );
+
+  // ----- assistant size ---------------------------------------------------
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ASSISTANT_SIZE_KEY);
+      if (saved && PUSH_CLASS[saved] !== undefined) setAssistantSize(saved);
+    } catch {}
+  }, []);
+
+  const changeAssistantSize = useCallback((size) => {
+    setAssistantSize(size);
+    try {
+      localStorage.setItem(ASSISTANT_SIZE_KEY, size);
+    } catch {}
+  }, []);
+
+  const openSidebar = useCallback(() => setSidebarOpen(true), []);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   // ----- load patients + inventory ----------------------------------------
   useEffect(() => {
@@ -89,28 +130,51 @@ export default function DispensePage() {
 
   // ----- full basket analysis ---------------------------------------------
   const analyseBasket = useCallback(
-    async (nextBasket, currentPatient) => {
-      if (nextBasket.length < 1) {
-        setAlerts([]);
-        return;
-      }
+    async (currentBasket, currentPatient) => {
+      // Only the latest request may update the UI (typing fires many changes)
+      const requestId = ++requestIdRef.current;
       setChecking(true);
       try {
         const { data } = await api.post("/api/ai/check-basket", {
-          basket: nextBasket.map((b) => ({ name: b.name, dosage: b.dosage })),
+          basket: currentBasket.map(toAIBasketItem),
           patientId: currentPatient?._id || null,
           sessionId,
           hospitalId,
         });
-        setAlerts(data.alerts || []);
+        if (requestId === requestIdRef.current) setAlerts(data.alerts || []);
       } catch {
-        setAlerts([]);
+        if (requestId === requestIdRef.current) setAlerts([]);
       } finally {
-        setChecking(false);
+        if (requestId === requestIdRef.current) setChecking(false);
       }
     },
     [hospitalId, sessionId],
   );
+
+  // Re-analyse when drugs, regimens or the patient change (not quantity)
+  const analysisKey = useMemo(
+    () =>
+      JSON.stringify({
+        patient: patient?._id || null,
+        basket: basket.map(toAIBasketItem),
+      }),
+    [basket, patient],
+  );
+
+  useEffect(() => {
+    if (basket.length === 0) {
+      requestIdRef.current++; // cancel anything in flight
+      setAlerts([]);
+      setChecking(false);
+      return;
+    }
+    const timer = setTimeout(
+      () => analyseBasket(basket, patient),
+      ANALYSE_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisKey]);
 
   // ----- inventory suggestions --------------------------------------------
   const suggestions = useMemo(() => {
@@ -131,28 +195,31 @@ export default function DispensePage() {
       toast.error(`${med.nameOfDrugs} is out of stock.`);
       return;
     }
-    const item = {
-      med: med._id,
-      name: med.nameOfDrugs,
-      dosage: med.dosage,
-      dosageForm: med.dosageForm,
-      price: med.price || 0,
-      stock: med.quantityInStock,
-      quantity: 1,
-    };
-    const next = [...basket, item];
-    setBasket(next);
+    setBasket((prev) => [
+      ...prev,
+      {
+        med: med._id,
+        name: med.nameOfDrugs,
+        dosage: med.dosage,
+        dosageForm: med.dosageForm,
+        price: med.price || 0,
+        stock: med.quantityInStock,
+        quantity: 1,
+        ...defaultRegimen(med), // prefilled from inventory defaults
+      },
+    ]);
     setDrugInput("");
-    analyseBasket(next, patient);
   };
 
-  const removeFromBasket = (index) => {
-    const next = basket.filter((_, i) => i !== index);
-    setBasket(next);
-    analyseBasket(next, patient);
-  };
+  const removeFromBasket = (index) =>
+    setBasket((prev) => prev.filter((_, i) => i !== index));
 
-  const updateQuantity = (index, quantity) => {
+  const updateItem = (index, patch) =>
+    setBasket((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+
+  const updateQuantity = (index, quantity) =>
     setBasket((prev) =>
       prev.map((item, i) =>
         i === index
@@ -166,13 +233,9 @@ export default function DispensePage() {
           : item,
       ),
     );
-  };
 
-  const handlePatientChange = (id) => {
-    const p = patients.find((x) => x._id === id) || null;
-    setPatient(p);
-    if (basket.length > 0) analyseBasket(basket, p);
-  };
+  const handlePatientChange = (id) =>
+    setPatient(patients.find((x) => x._id === id) || null);
 
   const total = basket.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -190,6 +253,14 @@ export default function DispensePage() {
     if (!patient) return toast.error("Select a patient first.");
     if (basket.length === 0) return;
 
+    const incomplete = basket.find((b) => !isRegimenComplete(b));
+    if (incomplete) {
+      setShowRegimenErrors(true);
+      return toast.error(
+        `Add the dose, frequency and duration for ${incomplete.name}.`,
+      );
+    }
+
     setDispensing(true);
     try {
       await api.post("/api/purchase", {
@@ -198,13 +269,14 @@ export default function DispensePage() {
         medications: basket.map((item) => ({
           medication: item.med,
           quantity: item.quantity,
+          ...toRegimenPayload(item),
         })),
       });
       toast.success(
         `Dispensed ${basket.length} item${basket.length > 1 ? "s" : ""} to ${patient.fullName}.`,
       );
       setBasket([]);
-      setAlerts([]);
+      setShowRegimenErrors(false);
     } catch (err) {
       toast.error(err.response?.data?.message || "Dispense failed.");
     } finally {
@@ -219,11 +291,16 @@ export default function DispensePage() {
       )
     : null;
 
+  const mh = patient?.medicalHistory;
+  const hasHistory =
+    !!mh &&
+    (mh.allergies?.length > 0 || mh.conditions?.length > 0 || !!mh.notes);
+
   // -----------------------------------------------------------------------
   return (
     <div
       className={`flex flex-col gap-4 pb-24 transition-[margin] duration-300 ${
-        sidebarOpen ? "lg:mr-[24rem]" : ""
+        sidebarOpen ? PUSH_CLASS[assistantSize] : ""
       }`}
     >
       {/* Header */}
@@ -231,11 +308,10 @@ export default function DispensePage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dispense</h1>
           <p className="text-sm text-muted-foreground">
-            Add drugs to the basket — the AI analyses the full combination for
-            interactions, contraindications, and therapy problems.
+            Add drugs and their doses. The AI checks the full combination for
+            interactions, contraindications, and dosing problems.
           </p>
         </div>
-        {/* Desktop: button lives in the header */}
         <Button
           variant={sidebarOpen ? "secondary" : "default"}
           onClick={() => setSidebarOpen((v) => !v)}
@@ -271,13 +347,29 @@ export default function DispensePage() {
                 </Select>
               )}
               {patient && (
-                <div className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                  {patientAge !== null && <span>{patientAge} yrs · </span>}
-                  <span className="capitalize">{patient.gender}</span>
-                  {" · "}
-                  {patient.medications?.filter((m) => m.current).length ||
-                    0}{" "}
-                  active medication(s) on record
+                <div className="mt-3 space-y-1 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                  <p>
+                    {patientAge !== null && <span>{patientAge} yrs · </span>}
+                    <span className="capitalize">{patient.gender}</span>
+                    {" · "}
+                    {patient.medications?.filter((m) => m.current).length ||
+                      0}{" "}
+                    active medication(s) on record
+                  </p>
+                  {mh?.allergies?.length > 0 && (
+                    <p className="font-medium text-red-600 dark:text-red-400">
+                      Allergies: {mh.allergies.join(", ")}
+                    </p>
+                  )}
+                  {mh?.conditions?.length > 0 && (
+                    <p>Conditions: {mh.conditions.join(", ")}</p>
+                  )}
+                  {!hasHistory && (
+                    <p className="text-amber-600 dark:text-amber-400">
+                      No medical history recorded. AI checks are limited to age,
+                      gender and meds on record.
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -287,7 +379,8 @@ export default function DispensePage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Add medication</CardTitle>
               <CardDescription>
-                Search inventory — basket is analysed after each addition
+                Search inventory. Doses are prefilled from each drug&apos;s
+                defaults
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -331,9 +424,8 @@ export default function DispensePage() {
           </Card>
         </div>
 
-        {/* ============== Right: basket first, then warnings below ============== */}
+        {/* ============== Right: basket, then warnings ============== */}
         <div className="flex flex-col gap-4 self-start">
-          {/* ── BASKET (clean, no per-row flags) ── */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -362,46 +454,187 @@ export default function DispensePage() {
                 </div>
               ) : (
                 <ul className="divide-y">
-                  {basket.map((item, i) => (
-                    <li
-                      key={`${item.med}-${i}`}
-                      className="flex items-center justify-between gap-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {item.name}{" "}
-                          <span className="font-normal text-muted-foreground">
-                            {item.dosage} · {item.dosageForm}
-                          </span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          ₦{item.price.toLocaleString()} each
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={item.stock}
-                          value={item.quantity}
-                          onChange={(e) => updateQuantity(i, e.target.value)}
-                          className="h-8 w-16 text-center"
-                          aria-label={`Quantity of ${item.name}`}
-                        />
-                        <span className="w-20 text-right text-sm tabular-nums">
-                          ₦{(item.price * item.quantity).toLocaleString()}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeFromBasket(i)}
-                          aria-label={`Remove ${item.name}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
+                  {basket.map((item, i) => {
+                    const perDay = dailyTotal(item);
+                    const doseBad = !(Number(item.doseValue) > 0);
+                    const freqBad = !item.frequency;
+                    const durationBad =
+                      item.frequency !== "STAT" &&
+                      !(Number(item.durationValue) > 0);
+
+                    return (
+                      <li key={`${item.med}-${i}`} className="py-3">
+                        {/* Drug row */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {item.name}{" "}
+                              <span className="font-normal text-muted-foreground">
+                                {item.dosage} · {item.dosageForm}
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              ₦{item.price.toLocaleString()} each
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={item.stock}
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updateQuantity(i, e.target.value)
+                              }
+                              className="h-8 w-16 text-center"
+                              aria-label={`Quantity of ${item.name}`}
+                            />
+                            <span className="w-20 text-right text-sm tabular-nums">
+                              ₦{(item.price * item.quantity).toLocaleString()}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeFromBasket(i)}
+                              aria-label={`Remove ${item.name}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Regimen: dose, frequency, duration */}
+                        <div className="mt-2 grid grid-cols-2 gap-2 rounded-md bg-muted/40 p-2.5 sm:grid-cols-3">
+                          {/* Dose */}
+                          <div className="grid content-start gap-1">
+                            <Label
+                              htmlFor={`dose-${i}`}
+                              className="text-[11px] text-muted-foreground"
+                            >
+                              Dose
+                            </Label>
+                            <div className="flex gap-1">
+                              <Input
+                                id={`dose-${i}`}
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="any"
+                                value={item.doseValue}
+                                onChange={(e) =>
+                                  updateItem(i, { doseValue: e.target.value })
+                                }
+                                placeholder="e.g. 500"
+                                className={`h-8 min-w-0 ${invalid(showRegimenErrors, doseBad)}`}
+                              />
+                              <Select
+                                value={item.doseUnit}
+                                onValueChange={(v) =>
+                                  updateItem(i, { doseUnit: v })
+                                }
+                              >
+                                <SelectTrigger
+                                  className="h-8 w-[4.5rem] shrink-0"
+                                  aria-label="Dose unit"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {DOSE_UNITS.map((u) => (
+                                    <SelectItem key={u} value={u}>
+                                      {u}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {perDay && (
+                              <p className="text-[10px] text-muted-foreground">
+                                {perDay} per day
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Frequency: full width on phones, middle on desktop */}
+                          <div className="order-last col-span-2 grid content-start gap-1 sm:order-none sm:col-span-1">
+                            <Label className="text-[11px] text-muted-foreground">
+                              Frequency
+                            </Label>
+                            <Select
+                              value={item.frequency || ""}
+                              onValueChange={(v) =>
+                                updateItem(i, { frequency: v })
+                              }
+                            >
+                              <SelectTrigger
+                                className={`h-8 ${invalid(showRegimenErrors, freqBad)}`}
+                                aria-label="Dose frequency"
+                              >
+                                <SelectValue placeholder="How often" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FREQUENCIES.map((f) => (
+                                  <SelectItem key={f.code} value={f.code}>
+                                    {f.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Duration */}
+                          <div className="grid content-start gap-1">
+                            <Label
+                              htmlFor={`duration-${i}`}
+                              className="text-[11px] text-muted-foreground"
+                            >
+                              Duration
+                            </Label>
+                            <div className="flex gap-1">
+                              <Input
+                                id={`duration-${i}`}
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                value={item.durationValue}
+                                onChange={(e) =>
+                                  updateItem(i, {
+                                    durationValue: e.target.value,
+                                  })
+                                }
+                                placeholder={
+                                  item.frequency === "STAT" ? "n/a" : "e.g. 5"
+                                }
+                                disabled={item.frequency === "STAT"}
+                                className={`h-8 min-w-0 ${invalid(showRegimenErrors, durationBad)}`}
+                              />
+                              <Select
+                                value={item.durationUnit}
+                                onValueChange={(v) =>
+                                  updateItem(i, { durationUnit: v })
+                                }
+                                disabled={item.frequency === "STAT"}
+                              >
+                                <SelectTrigger
+                                  className="h-8 w-[5.5rem] shrink-0"
+                                  aria-label="Duration unit"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {DURATION_UNITS.map((u) => (
+                                    <SelectItem key={u} value={u}>
+                                      {u}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
@@ -426,7 +659,7 @@ export default function DispensePage() {
             </CardContent>
           </Card>
 
-          {/* ── CENTRAL WARNING BOX (below the basket) ── */}
+          {/* ── CENTRAL WARNING BOX ── */}
           {(alerts.length > 0 || checking) && (
             <Card className="border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/30">
               <CardContent className="p-4">
@@ -493,10 +726,12 @@ export default function DispensePage() {
       <AssistantSidebar
         ref={sidebarRef}
         open={sidebarOpen}
-        onOpen={() => setSidebarOpen(true)}
-        onClose={() => setSidebarOpen(false)}
+        onOpen={openSidebar}
+        onClose={closeSidebar}
         patient={patient}
         basket={basket}
+        size={assistantSize}
+        onSizeChange={changeAssistantSize}
       />
     </div>
   );

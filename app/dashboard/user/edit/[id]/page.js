@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import api from "@/app/axios/axiosConfig";
 import { toast } from "sonner";
+import MedicalHistoryCard, {
+  EMPTY_MEDICAL_HISTORY,
+  toMedicalHistoryPayload,
+} from "@/app/components/MedicalHistoryCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +38,21 @@ const shortDate = (d) =>
       })
     : "—";
 
+// Turn the saved record into the card's form state
+const toMedicalHistoryState = (mh) => {
+  if (!mh) return EMPTY_MEDICAL_HISTORY;
+  return {
+    conditions: mh.conditions || [],
+    allergies: mh.allergies || [],
+    pregnancyStatus:
+      mh.pregnancyStatus && mh.pregnancyStatus !== "not_applicable"
+        ? mh.pregnancyStatus
+        : "unknown",
+    weightKg: mh.weightKg != null ? String(mh.weightKg) : "",
+    notes: mh.notes || "",
+  };
+};
+
 export default function EditPatient() {
   const router = useRouter();
   const { id } = useParams();
@@ -51,6 +70,8 @@ export default function EditPatient() {
     phoneNumber: "",
     email: "",
   });
+  const [medicalHistory, setMedicalHistory] = useState(EMPTY_MEDICAL_HISTORY);
+  const [historyUpdatedAt, setHistoryUpdatedAt] = useState(null);
   const [existing, setExisting] = useState([]);
   const [added, setAdded] = useState([]);
   const [medQuery, setMedQuery] = useState("");
@@ -75,6 +96,8 @@ export default function EditPatient() {
           phoneNumber: u.phoneNumber || "",
           email: u.email || "",
         });
+        setMedicalHistory(toMedicalHistoryState(u.medicalHistory));
+        setHistoryUpdatedAt(u.medicalHistory?.updatedAt || null);
         setExisting(
           (u.medications || []).map((m) => ({
             _id: m._id,
@@ -175,6 +198,7 @@ export default function EditPatient() {
         gender: form.gender,
         phoneNumber: form.phoneNumber.trim(),
         email: form.email.trim(),
+        medicalHistory: toMedicalHistoryPayload(medicalHistory, form.gender),
         medications: existing.map((m) => ({
           _id: m._id,
           quantity: Number(m.quantity) || 1,
@@ -273,64 +297,77 @@ export default function EditPatient() {
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_420px]">
-        {/* Left: patient details */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">Patient details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="fullName">Full name</Label>
-              <Input
-                id="fullName"
-                value={form.fullName}
-                onChange={(e) => set("fullName", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="dateOfBirth">Date of birth</Label>
-              <Input
-                id="dateOfBirth"
-                type="date"
-                value={form.dateOfBirth}
-                onChange={(e) => set("dateOfBirth", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Gender</Label>
-              <Select
-                value={form.gender}
-                onValueChange={(v) => set("gender", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="phoneNumber">Phone</Label>
-              <Input
-                id="phoneNumber"
-                value={form.phoneNumber}
-                onChange={(e) => set("phoneNumber", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={form.email}
-                onChange={(e) => set("email", e.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Left: patient details + medical history */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Patient details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="fullName">Full name</Label>
+                <Input
+                  id="fullName"
+                  value={form.fullName}
+                  onChange={(e) => set("fullName", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dateOfBirth">Date of birth</Label>
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(e) => set("dateOfBirth", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Gender</Label>
+                <Select
+                  value={form.gender}
+                  onValueChange={(v) => set("gender", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="phoneNumber">Phone</Label>
+                <Input
+                  id="phoneNumber"
+                  value={form.phoneNumber}
+                  onChange={(e) => set("phoneNumber", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => set("email", e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <MedicalHistoryCard
+            value={medicalHistory}
+            onChange={setMedicalHistory}
+            gender={form.gender}
+          />
+          {historyUpdatedAt && (
+            <p className="-mt-2 px-1 text-xs text-muted-foreground">
+              Medical history last updated {shortDate(historyUpdatedAt)}
+            </p>
+          )}
+        </div>
 
         {/* Right: medications */}
         <div className="flex flex-col gap-4">
@@ -338,7 +375,7 @@ export default function EditPatient() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Current medications</CardTitle>
               <CardDescription>
-                Update quantities or mark for removal — changes apply on save
+                Update quantities or mark for removal, changes apply on save
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
