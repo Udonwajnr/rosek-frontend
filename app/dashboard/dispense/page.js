@@ -5,10 +5,11 @@ import { toast } from "sonner";
 import AssistantSidebar from "../../components/dispense/AssistantSidebar";
 import {
   DOSE_UNITS,
-  FREQUENCIES,
+  FREQUENCY_UNITS,
   DURATION_UNITS,
   defaultRegimen,
   dailyTotal,
+  timesPerDayLabel,
   isRegimenComplete,
   toAIBasketItem,
   toRegimenPayload,
@@ -456,11 +457,10 @@ export default function DispensePage() {
                 <ul className="divide-y">
                   {basket.map((item, i) => {
                     const perDay = dailyTotal(item);
+                    const howOften = timesPerDayLabel(item);
                     const doseBad = !(Number(item.doseValue) > 0);
-                    const freqBad = !item.frequency;
-                    const durationBad =
-                      item.frequency !== "STAT" &&
-                      !(Number(item.durationValue) > 0);
+                    const freqBad = !(Number(item.frequencyValue) > 0);
+                    const durationBad = !(Number(item.durationValue) > 0);
 
                     return (
                       <li key={`${item.med}-${i}`} className="py-3">
@@ -555,31 +555,58 @@ export default function DispensePage() {
                             )}
                           </div>
 
-                          {/* Frequency: full width on phones, middle on desktop */}
+                          {/* Frequency: "Every [8] [hours]", full width on phones */}
                           <div className="order-last col-span-2 grid content-start gap-1 sm:order-none sm:col-span-1">
-                            <Label className="text-[11px] text-muted-foreground">
+                            <Label
+                              htmlFor={`frequency-${i}`}
+                              className="text-[11px] text-muted-foreground"
+                            >
                               Frequency
                             </Label>
-                            <Select
-                              value={item.frequency || ""}
-                              onValueChange={(v) =>
-                                updateItem(i, { frequency: v })
-                              }
-                            >
-                              <SelectTrigger
-                                className={`h-8 ${invalid(showRegimenErrors, freqBad)}`}
-                                aria-label="Dose frequency"
+                            <div className="flex items-center gap-1">
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                Every
+                              </span>
+                              <Input
+                                id={`frequency-${i}`}
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                value={item.frequencyValue}
+                                onChange={(e) =>
+                                  updateItem(i, {
+                                    frequencyValue: e.target.value,
+                                  })
+                                }
+                                placeholder="e.g. 8"
+                                className={`h-8 min-w-0 ${invalid(showRegimenErrors, freqBad)}`}
+                              />
+                              <Select
+                                value={item.frequencyUnit}
+                                onValueChange={(v) =>
+                                  updateItem(i, { frequencyUnit: v })
+                                }
                               >
-                                <SelectValue placeholder="How often" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {FREQUENCIES.map((f) => (
-                                  <SelectItem key={f.code} value={f.code}>
-                                    {f.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                                <SelectTrigger
+                                  className="h-8 w-[5.5rem] shrink-0"
+                                  aria-label="Frequency unit"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {FREQUENCY_UNITS.map((u) => (
+                                    <SelectItem key={u} value={u}>
+                                      {u}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {howOften && (
+                              <p className="text-[10px] text-muted-foreground">
+                                {howOften}
+                              </p>
+                            )}
                           </div>
 
                           {/* Duration */}
@@ -602,10 +629,7 @@ export default function DispensePage() {
                                     durationValue: e.target.value,
                                   })
                                 }
-                                placeholder={
-                                  item.frequency === "STAT" ? "n/a" : "e.g. 5"
-                                }
-                                disabled={item.frequency === "STAT"}
+                                placeholder="e.g. 5"
                                 className={`h-8 min-w-0 ${invalid(showRegimenErrors, durationBad)}`}
                               />
                               <Select
@@ -613,7 +637,6 @@ export default function DispensePage() {
                                 onValueChange={(v) =>
                                   updateItem(i, { durationUnit: v })
                                 }
-                                disabled={item.frequency === "STAT"}
                               >
                                 <SelectTrigger
                                   className="h-8 w-[5.5rem] shrink-0"
